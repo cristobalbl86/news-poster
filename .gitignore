@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+channels/*.env
+!channels/*.env.example
+logs/
+output/
+*.js.map
