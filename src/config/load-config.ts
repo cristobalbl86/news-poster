@@ -73,6 +73,10 @@ export function loadBotConfig(channelName: string): BotConfig {
     newsCategories,
     hashtags: e.HASHTAGS || '',
 
+    telegramBotToken: e.TELEGRAM_BOT_TOKEN || undefined,
+    telegramChatId: e.TELEGRAM_CHAT_ID || undefined,
+    telegramApprovalTimeout: parseInt(e.TELEGRAM_APPROVAL_TIMEOUT || '1800000', 10),
+
     gnewsApiKey,
     newsdataApiKey: e.NEWSDATA_API_KEY,
     pexelsApiKey: e.PEXELS_API_KEY,

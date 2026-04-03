@@ -28,6 +28,11 @@ export interface BotConfig {
   newsCategories: NewsCategoryOrAlias[];
   hashtags: string;
 
+  // Telegram approval (optional — approve/reject posts before publishing)
+  telegramBotToken?: string;
+  telegramChatId?: string;
+  telegramApprovalTimeout: number;  // ms to wait for approval before skipping
+
   // Shared
   gnewsApiKey: string;
   newsdataApiKey?: string;
