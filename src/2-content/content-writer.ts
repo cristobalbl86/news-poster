@@ -2,7 +2,7 @@
 // Content Writer — Claude generates Facebook captions
 //
 // Language-aware: uses channel's configured language.
-// Style: short, punchy, breaking-news tone (like Cerebros page)
+// Style: short, punchy, breaking-news tone (like epicentro page)
 // Format: 2-4 sentences, no hashtags (added separately)
 // =============================================================
 

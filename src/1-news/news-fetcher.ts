@@ -56,7 +56,7 @@ interface GNewsResponse {
 async function fetchHeadlines(
   apiKey: string,
   lang: string,
-  options: { category?: string; country?: string; max?: number }
+  options: { category?: string; country?: string; max?: number; fromHoursAgo?: number }
 ): Promise<GNewsArticle[]> {
   const params: Record<string, string | number> = {
     apikey: apiKey,
@@ -66,6 +66,10 @@ async function fetchHeadlines(
 
   if (options.category) params.category = options.category;
   if (options.country) params.country = options.country;
+  if (options.fromHoursAgo) {
+    const from = new Date(Date.now() - options.fromHoursAgo * 60 * 60 * 1000);
+    params.from = from.toISOString();
+  }
 
   const response = await axios.get<GNewsResponse>(`${GNEWS_BASE}/top-headlines`, {
     params,
@@ -101,44 +105,60 @@ export async function fetchTrendingNews(
   categories: NewsCategoryOrAlias[],
   language: string,
   country?: string,
-  maxPerCategory: number = 10
+  maxPerCategory: number = 10,
+  fromHoursAgo: number = 6
 ): Promise<NewsArticle[]> {
   const log = getLogger();
-  const results: NewsArticle[] = [];
 
-  for (const cat of categories) {
+  // Build fetch tasks for all categories
+  const fetchTasks = categories.map(cat => {
     const catLower = cat.toLowerCase().trim();
 
-    try {
-      log.info(`Fetching trending "${catLower}" news (lang=${language})...`);
-      let rawArticles: GNewsArticle[] = [];
+    if (COUNTRY_ALIASES[catLower]) {
+      return { catLower, promise: fetchHeadlines(apiKey, language, {
+        country: COUNTRY_ALIASES[catLower],
+        max: maxPerCategory,
+        fromHoursAgo,
+      })};
+    } else if (VALID_CATEGORIES.has(catLower)) {
+      return { catLower, promise: fetchHeadlines(apiKey, language, {
+        category: catLower,
+        country,
+        max: maxPerCategory,
+        fromHoursAgo,
+      })};
+    } else {
+      log.warn(`Unknown category "${catLower}" — skipping. Valid: ${[...VALID_CATEGORIES].join(', ')}, ${Object.keys(COUNTRY_ALIASES).join(', ')}`);
+      return null;
+    }
+  }).filter(Boolean) as { catLower: string; promise: Promise<GNewsArticle[]> }[];
 
-      if (COUNTRY_ALIASES[catLower]) {
-        // Pseudo-category: fetch general headlines from that country
-        rawArticles = await fetchHeadlines(apiKey, language, {
-          country: COUNTRY_ALIASES[catLower],
-          max: maxPerCategory,
-        });
-      } else if (VALID_CATEGORIES.has(catLower)) {
-        // Real GNews category
-        rawArticles = await fetchHeadlines(apiKey, language, {
-          category: catLower,
-          country,
-          max: maxPerCategory,
-        });
-      } else {
-        log.warn(`Unknown category "${catLower}" — skipping. Valid: ${[...VALID_CATEGORIES].join(', ')}, ${Object.keys(COUNTRY_ALIASES).join(', ')}`);
-        continue;
+  log.info(`Fetching ${fetchTasks.length} categories in parallel (lang=${language}, last ${fromHoursAgo}h)...`);
+
+  // Fetch all categories in parallel
+  const settled = await Promise.allSettled(fetchTasks.map(t => t.promise));
+
+  const results: NewsArticle[] = [];
+  const seenUrls = new Set<string>();
+
+  for (let i = 0; i < settled.length; i++) {
+    const { catLower } = fetchTasks[i];
+    const outcome = settled[i];
+
+    if (outcome.status === 'fulfilled') {
+      const articles = outcome.value.map(a => toNewsArticle(a, catLower));
+      // Deduplicate by URL across categories
+      let added = 0;
+      for (const article of articles) {
+        if (!seenUrls.has(article.url)) {
+          seenUrls.add(article.url);
+          results.push(article);
+          added++;
+        }
       }
-
-      const articles = rawArticles.map(a => toNewsArticle(a, catLower));
-      log.info(`  → ${articles.length} articles from "${catLower}"`);
-      results.push(...articles);
-
-      // Respect rate limits
-      await new Promise(r => setTimeout(r, 500));
-    } catch (err: any) {
-      log.error(`Failed to fetch "${catLower}" news: ${err.message}`);
+      log.info(`  → ${added} unique articles from "${catLower}" (${outcome.value.length - added} dupes skipped)`);
+    } else {
+      log.error(`Failed to fetch "${catLower}" news: ${outcome.reason?.message || outcome.reason}`);
     }
   }
 

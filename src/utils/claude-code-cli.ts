@@ -60,10 +60,14 @@ CRITICAL: Respond with ONLY valid JSON. No markdown, no code fences, no explanat
   const firstBracket = cleaned.indexOf('[');
   const lastBracket = cleaned.lastIndexOf(']');
 
-  if (firstBrace !== -1 && lastBrace !== -1) {
-    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
-  } else if (firstBracket !== -1 && lastBracket !== -1) {
+  // Pick whichever delimiter appears first — arrays of objects have both
+  const braceValid = firstBrace !== -1 && lastBrace !== -1;
+  const bracketValid = firstBracket !== -1 && lastBracket !== -1;
+
+  if (bracketValid && (!braceValid || firstBracket < firstBrace)) {
     cleaned = cleaned.slice(firstBracket, lastBracket + 1);
+  } else if (braceValid) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
   }
 
   try {

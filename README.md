@@ -16,7 +16,7 @@ AI-powered news aggregation and posting pipeline that fetches trending articles 
 - **Claude Code CLI** installed and available in your PATH ([docs](https://docs.anthropic.com/en/docs/claude-code))
 - **GNews API key** -- free tier gives 100 requests/day. Get one at <https://gnews.io>
 - **Facebook Page Access Token** -- a long-lived page access token with `pages_manage_posts` and `pages_read_engagement` permissions
-- **Pexels API key** *(optional)* -- used as image fallback. Get one at <https://www.pexels.com/api/>
+- **Pexels API key** _(optional)_ -- used as image fallback. Get one at <https://www.pexels.com/api/>
 
 ## Installation
 
@@ -38,38 +38,38 @@ Copy the example and fill in your values:
 cp .env.example .env
 ```
 
-| Variable | Required | Description |
-|---|---|---|
-| `GNEWS_API_KEY` | Yes | GNews API key |
-| `CLAUDE_CODE_PATH` | No | Path to the Claude CLI binary (default: `claude`) |
-| `CLAUDE_CODE_TIMEOUT` | No | Timeout in ms for Claude calls (default: `60000`) |
-| `PEXELS_API_KEY` | No | Pexels API key for image fallback |
-| `LOG_LEVEL` | No | Winston log level (default: `info`) |
-| `LOG_FILE` | No | Log file path (default: `./logs/bot.log`) |
-| `DRY_RUN` | No | Set to `true` to skip actual Facebook posting (default: `false`) |
+| Variable              | Required | Description                                                      |
+| --------------------- | -------- | ---------------------------------------------------------------- |
+| `GNEWS_API_KEY`       | Yes      | GNews API key                                                    |
+| `CLAUDE_CODE_PATH`    | No       | Path to the Claude CLI binary (default: `claude`)                |
+| `CLAUDE_CODE_TIMEOUT` | No       | Timeout in ms for Claude calls (default: `60000`)                |
+| `PEXELS_API_KEY`      | No       | Pexels API key for image fallback                                |
+| `LOG_LEVEL`           | No       | Winston log level (default: `info`)                              |
+| `LOG_FILE`            | No       | Log file path (default: `./logs/bot.log`)                        |
+| `DRY_RUN`             | No       | Set to `true` to skip actual Facebook posting (default: `false`) |
 
 ### 2. Channel configuration (`channels/<name>.env`)
 
 Each channel is defined by a file under `channels/`. Copy an example to get started:
 
 ```bash
-cp channels/cerebros.env.example channels/cerebros.env
+cp channels/epicentro.env.example channels/epicentro.env
 # or for an English channel:
 cp channels/tech-pulse-en.env.example channels/tech-pulse-en.env
 ```
 
-| Variable | Required | Description |
-|---|---|---|
-| `PAGE_DISPLAY_NAME` | No | Human-readable page name (default: filename) |
-| `LANGUAGE` | No | Language code for news fetching and caption writing: `es`, `en`, `pt`, etc. (default: `es`) |
-| `COUNTRY` | No | Country code to filter GNews sources: `mx`, `us`, `ar`, etc. |
-| `NEWS_CATEGORIES` | No | Comma-separated list of categories (default: `technology,world`). See below |
-| `TOPIC_FOCUS` | No | Free-text description guiding Claude curation (e.g. `"AI breakthroughs, startup funding rounds"`) |
-| `FACEBOOK_PAGE_ID` | Yes | Your Facebook Page ID |
-| `FACEBOOK_ACCESS_TOKEN` | Yes | Long-lived Facebook Page access token |
-| `POSTING_SCHEDULE` | No | Cron expression for the scheduler (default: `0 */3 * * *` -- every 3 hours) |
-| `MAX_POSTS_PER_RUN` | No | Max articles to post per pipeline run (default: `2`) |
-| `HASHTAGS` | No | Hashtags appended to every post (e.g. `#tech #AI #news`) |
+| Variable                | Required | Description                                                                                       |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------------------- |
+| `PAGE_DISPLAY_NAME`     | No       | Human-readable page name (default: filename)                                                      |
+| `LANGUAGE`              | No       | Language code for news fetching and caption writing: `es`, `en`, `pt`, etc. (default: `es`)       |
+| `COUNTRY`               | No       | Country code to filter GNews sources: `mx`, `us`, `ar`, etc.                                      |
+| `NEWS_CATEGORIES`       | No       | Comma-separated list of categories (default: `technology,world`). See below                       |
+| `TOPIC_FOCUS`           | No       | Free-text description guiding Claude curation (e.g. `"AI breakthroughs, startup funding rounds"`) |
+| `FACEBOOK_PAGE_ID`      | Yes      | Your Facebook Page ID                                                                             |
+| `FACEBOOK_ACCESS_TOKEN` | Yes      | Long-lived Facebook Page access token                                                             |
+| `POSTING_SCHEDULE`      | No       | Cron expression for the scheduler (default: `0 */3 * * *` -- every 3 hours)                       |
+| `MAX_POSTS_PER_RUN`     | No       | Max articles to post per pipeline run (default: `2`)                                              |
+| `HASHTAGS`              | No       | Hashtags appended to every post (e.g. `#tech #AI #news`)                                          |
 
 #### Supported news categories
 
@@ -86,11 +86,11 @@ Create a new file `channels/<name>.env` -- no code changes needed. The scheduler
 ### Run the pipeline once for a specific channel
 
 ```bash
-# Run for the "cerebros" channel
-npm run pipeline -- --channel cerebros
+# Run for the "epicentro" channel
+npm run pipeline -- --channel epicentro
 
 # Dry run (no Facebook posting)
-npm run pipeline -- --channel cerebros --dry-run
+npm run pipeline -- --channel epicentro --dry-run
 
 # Shortcut for dry-run testing
 npm run test:post
@@ -118,7 +118,7 @@ npx pm2 start node --name "news-bot-scheduler" \
 news-poster/
 ├── .env.example                  # Shared env vars (API keys, Claude path)
 ├── channels/
-│   ├── cerebros.env.example      # Example: Spanish channel (Mexico-focused)
+│   ├── epicentro.env.example      # Example: Spanish channel (Mexico-focused)
 │   └── tech-pulse-en.env.example # Example: English channel
 ├── scheduler/
 │   └── local-scheduler.ts        # Cron-based multi-channel scheduler

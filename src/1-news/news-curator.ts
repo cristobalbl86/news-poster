@@ -24,26 +24,33 @@ interface CurationResult {
 }
 
 function buildCurationPrompt(articles: NewsArticle[], config: BotConfig): string {
-  const articleList = articles.map((a, i) =>
-    `[${i}] "${a.title}" — ${a.description || 'No description'} (source: ${a.source.name}, category: ${a.category})`
-  ).join('\n');
+  const now = new Date();
+  const articleList = articles.map((a, i) => {
+    const ageMs = now.getTime() - new Date(a.publishedAt).getTime();
+    const ageMin = Math.round(ageMs / 60000);
+    const ageLabel = ageMin < 60 ? `${ageMin}m ago` : `${Math.round(ageMin / 60)}h ago`;
+    return `[${i}] "${a.title}" — ${a.description || 'No description'} (source: ${a.source.name}, category: ${a.category}, published: ${ageLabel})`;
+  }).join('\n');
 
   return `You are a social media editor for a Facebook page called "${config.pageDisplayName}".
 The page's focus is: ${config.topicFocus}
 The audience language is: ${config.language}
 
-Below are ${articles.length} news articles fetched from trending headlines. Your job is to rank them by their potential impact and engagement on Facebook. Consider:
-- How impactful, surprising, or emotionally compelling is the story?
-- How relevant is it to the page's topic focus?
-- Would this make people stop scrolling, read, and react?
-- Avoid stories that are too niche, too old, or clickbait with no substance.
+CRITICAL: This page competes on SPEED. Being first to post breaking news is the #1 priority.
+
+Below are ${articles.length} news articles fetched from trending headlines. Your job is to rank them by a combination of RECENCY and IMPACT. Scoring rules:
+1. **Recency is king** — articles published in the last 1-2 hours should get a +2 bonus. Articles older than 4 hours should be penalized.
+2. **Breaking news** — developing stories, "just in" events, or first reports should score highest.
+3. **Impact & engagement** — how impactful, surprising, or emotionally compelling is the story for the audience?
+4. **Relevance** — how well does it match the page's topic focus?
+5. **Skip** — stories that are too niche, too old, clickbait with no substance, or duplicates of the same event.
 
 Articles:
 ${articleList}
 
 Return a JSON array of objects, one per article, with:
 - "index": the article number [0..${articles.length - 1}]
-- "score": relevance/impact score from 1 (skip) to 10 (must post)
+- "score": score from 1 (skip) to 10 (must post NOW) — weight recency heavily
 - "reason": one sentence explaining why (in ${config.language})
 
 Sort the array by score descending (highest first). Only include articles with score >= 5.`;
