@@ -21,7 +21,7 @@ const LANGUAGE_PROMPTS: Record<string, { role: string; instructions: string; clo
 - Tono informativo pero con gancho emocional
 - NO uses hashtags (se agregarán por separado)
 - NO uses emojis
-- Máximo 280 caracteres total`,
+- Máximo 350 caracteres total`,
     closingInstruction: 'Responde SOLO con el texto de la publicación, sin comillas ni explicación adicional.',
   },
   en: {
@@ -33,7 +33,7 @@ const LANGUAGE_PROMPTS: Record<string, { role: string; instructions: string; clo
 - Informative tone with emotional hook
 - NO hashtags (added separately)
 - NO emojis
-- Maximum 280 characters total`,
+- Maximum 350 characters total`,
     closingInstruction: 'Respond ONLY with the post text, no quotes or extra explanation.',
   },
   pt: {
@@ -45,7 +45,7 @@ const LANGUAGE_PROMPTS: Record<string, { role: string; instructions: string; clo
 - Tom informativo com gancho emocional
 - NÃO use hashtags (serão adicionadas separadamente)
 - NÃO use emojis
-- Máximo 280 caracteres no total`,
+- Máximo 350 caracteres no total`,
     closingInstruction: 'Responda APENAS com o texto da publicação, sem aspas ou explicação adicional.',
   },
 };
@@ -89,7 +89,7 @@ export async function writeCaption(
   } catch (err: any) {
     log.error(`Failed to write caption: ${err.message}`);
     // Fallback: use title + description directly
-    const fallback = `${article.title}. ${article.description || ''}`.slice(0, 280).trim();
+    const fallback = `${article.title}. ${article.description || ''}`.slice(0, 350).trim();
     log.info(`Using fallback caption: "${fallback.slice(0, 60)}..."`);
     return fallback;
   }

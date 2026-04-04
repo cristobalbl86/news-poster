@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npx tsx:*)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
