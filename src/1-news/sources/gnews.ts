@@ -94,6 +94,7 @@ export async function fetchFromGNews(
   country?: string,
   maxPerCategory: number = 10,
   fromHoursAgo: number = 24,
+  isNativeLang: boolean = true,
 ): Promise<NewsArticle[]> {
   const log = getLogger();
   const results: NewsArticle[] = [];
@@ -105,6 +106,12 @@ export async function fetchFromGNews(
       continue;
     }
 
+    // Skip country-alias categories (e.g. "mexico") for non-native languages — no point fetching en+mx
+    if (!isNativeLang && resolved.type === 'country') {
+      log.debug(`  [gnews/${lang}] Skipping country alias "${cat}" for non-native lang`);
+      continue;
+    }
+
     try {
       if (results.length > 0) await new Promise(r => setTimeout(r, 1000));
 
@@ -112,7 +119,9 @@ export async function fetchFromGNews(
       if (resolved.type === 'country') {
         raw = await fetchHeadlines(apiKey, lang, { country: resolved.value, max: maxPerCategory, fromHoursAgo });
       } else {
-        raw = await fetchHeadlines(apiKey, lang, { category: resolved.value, country, max: maxPerCategory, fromHoursAgo });
+        // Only apply country filter for native language
+        const countryFilter = isNativeLang ? country : undefined;
+        raw = await fetchHeadlines(apiKey, lang, { category: resolved.value, country: countryFilter, max: maxPerCategory, fromHoursAgo });
       }
 
       const articles = raw.map(a => toNewsArticle(a, cat.toLowerCase().trim(), lang));
