@@ -54,7 +54,7 @@ function start(): void {
 
   if (channels.length === 0) {
     log.warn('No channel configs found in channels/. Create a channels/{name}.env file to get started.');
-    log.warn('See channels/cerebros.env.example for reference.');
+    log.warn('See channels/epicentro.env.example for reference.');
     return;
   }
 

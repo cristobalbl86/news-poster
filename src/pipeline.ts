@@ -2,8 +2,8 @@
 // tech-news-bot Pipeline
 //
 // Usage:
-//   npm run pipeline -- --channel cerebros
-//   npm run pipeline -- --channel cerebros --dry-run
+//   npm run pipeline -- --channel epicentro
+//   npm run pipeline -- --channel epicentro --dry-run
 //
 // Flow per run:
 //   1. Fetch trending news (per channel categories + language)
@@ -28,7 +28,7 @@ import type { GeneratedPost, PostResult } from './config/types.js';
 
 function parseArgs(): { channel: string; dryRun: boolean } {
   const args = process.argv.slice(2);
-  let channel = 'cerebros';
+  let channel = 'epicentro';
   let dryRun = false;
 
   for (let i = 0; i < args.length; i++) {
