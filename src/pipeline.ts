@@ -86,7 +86,18 @@ export async function runPipeline(channelName: string, dryRunOverride?: boolean)
   // --- Stage 3: Claude curates by impact ---
   log.info('\n[3/5] Claude curating articles by impact...');
   const curated = await curateArticles(freshArticles, config);
-  const toPost = curated.slice(0, config.maxPostsPerRun);
+  let toPost = curated.slice(0, config.maxPostsPerRun);
+
+  // Guarantee at least 1 article in the channel's native language
+  const hasNative = toPost.some(a => a.sourceLang === config.language);
+  if (!hasNative) {
+    const nativeArticle = curated.find(a => a.sourceLang === config.language && !toPost.includes(a));
+    if (nativeArticle) {
+      toPost.push(nativeArticle);
+      log.info(`All top picks were EN — added 1 ${config.language.toUpperCase()} article (${toPost.length} total)`);
+    }
+  }
+
   log.info(`Will post ${toPost.length} article(s) this run`);
 
   // --- Stages 4-5: For each article: write → image → post → track ---
