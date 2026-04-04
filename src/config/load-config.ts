@@ -74,6 +74,7 @@ export function loadBotConfig(channelName: string): BotConfig {
     hashtags: e.HASHTAGS || '',
 
     gnewsApiKey,
+    newsdataApiKey: e.NEWSDATA_API_KEY,
     pexelsApiKey: e.PEXELS_API_KEY,
     claudeCodePath: e.CLAUDE_CODE_PATH || 'claude',
     claudeCodeTimeout: parseInt(e.CLAUDE_CODE_TIMEOUT || '60000', 10),

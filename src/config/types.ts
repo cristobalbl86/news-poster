@@ -30,6 +30,7 @@ export interface BotConfig {
 
   // Shared
   gnewsApiKey: string;
+  newsdataApiKey?: string;
   pexelsApiKey?: string;
   claudeCodePath: string;
   claudeCodeTimeout: number;
@@ -37,6 +38,8 @@ export interface BotConfig {
   logFile: string;
   dryRun: boolean;
 }
+
+export type NewsProvider = 'gnews' | 'newsdata' | 'google-rss';
 
 export interface NewsArticle {
   title: string;
@@ -50,6 +53,8 @@ export interface NewsArticle {
     url: string;
   };
   category: string;
+  sourceLang: string;     // language the article was fetched in (e.g. "es", "en")
+  provider: NewsProvider;  // which API provided this article
 }
 
 export interface CuratedArticle extends NewsArticle {

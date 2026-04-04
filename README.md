@@ -4,7 +4,7 @@ AI-powered news aggregation and posting pipeline that fetches trending articles 
 
 ## Pipeline Stages
 
-1. **Fetch** -- Retrieve trending news from GNews API by category and language
+1. **Fetch** -- Retrieve trending news from multiple sources (GNews -> NewsData.io -> Google News RSS) in both Spanish and English
 2. **Deduplicate** -- Filter out articles already posted in the last 7 days
 3. **Curate** -- Claude AI ranks articles by impact, virality, and relevance to the channel's topic focus
 4. **Generate & Post** -- For each top article: write a caption (Claude), resolve an image (article image -> Pexels fallback -> link-only), post to Facebook, and track the URL
@@ -15,6 +15,7 @@ AI-powered news aggregation and posting pipeline that fetches trending articles 
 - **Node.js** >= 18
 - **Claude Code CLI** installed and available in your PATH ([docs](https://docs.anthropic.com/en/docs/claude-code))
 - **GNews API key** -- free tier gives 100 requests/day. Get one at <https://gnews.io>
+- **NewsData.io API key** _(optional)_ -- fallback news source, free tier gives 200 requests/day. Get one at <https://newsdata.io/register>
 - **Facebook Page Access Token** -- a long-lived page access token with `pages_manage_posts` and `pages_read_engagement` permissions
 - **Pexels API key** _(optional)_ -- used as image fallback. Get one at <https://www.pexels.com/api/>
 
@@ -41,6 +42,7 @@ cp .env.example .env
 | Variable              | Required | Description                                                      |
 | --------------------- | -------- | ---------------------------------------------------------------- |
 | `GNEWS_API_KEY`       | Yes      | GNews API key                                                    |
+| `NEWSDATA_API_KEY`    | No       | NewsData.io API key — fallback news source (200 req/day free)    |
 | `CLAUDE_CODE_PATH`    | No       | Path to the Claude CLI binary (default: `claude`)                |
 | `CLAUDE_CODE_TIMEOUT` | No       | Timeout in ms for Claude calls (default: `60000`)                |
 | `PEXELS_API_KEY`      | No       | Pexels API key for image fallback                                |

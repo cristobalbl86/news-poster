@@ -61,7 +61,10 @@ export async function runPipeline(channelName: string, dryRunOverride?: boolean)
     config.gnewsApiKey,
     config.newsCategories,
     config.language,
-    config.country
+    config.country,
+    10,
+    24,
+    config.newsdataApiKey,
   );
   log.info(`Fetched ${allArticles.length} total articles`);
 
