@@ -106,7 +106,7 @@ export async function fetchFromGNews(
     }
 
     try {
-      if (results.length > 0) await new Promise(r => setTimeout(r, 300));
+      if (results.length > 0) await new Promise(r => setTimeout(r, 1000));
 
       let raw: GNewsArticle[];
       if (resolved.type === 'country') {

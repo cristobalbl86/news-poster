@@ -54,7 +54,9 @@ export async function fetchTrendingNews(
 
   // --- Source 1: GNews ---
   log.info(`[Source 1/3] GNews...`);
-  for (const lang of langs) {
+  for (let li = 0; li < langs.length; li++) {
+    if (li > 0) await new Promise(r => setTimeout(r, 2000)); // pause between languages to avoid 429
+    const lang = langs[li];
     const articles = await fetchFromGNews(apiKey, categories, lang, country, maxPerCategory, fromHoursAgo);
     const unique = dedup(results, articles);
     results.push(...unique);
