@@ -3,7 +3,12 @@
     "allow": [
       "Bash(npx tsx:*)",
       "Bash(npm ls:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }
