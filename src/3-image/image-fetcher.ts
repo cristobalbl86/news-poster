@@ -74,8 +74,17 @@ export async function resolveImage(
 
   // 1. Use article's own image (best — it's actually from the news story)
   if (article.image) {
-    log.debug(`Using article image: ${article.image}`);
-    return article.image;
+    try {
+      const check = await axios.head(article.image, { timeout: 5000 });
+      const contentType = check.headers['content-type'] || '';
+      if (contentType.startsWith('image/')) {
+        log.debug(`Using article image: ${article.image}`);
+        return article.image;
+      }
+      log.warn(`Article image is not an image (${contentType}): ${article.image}`);
+    } catch {
+      log.warn(`Article image unreachable, falling back: ${article.image}`);
+    }
   }
 
   // 2. Fallback: Pexels search by article keywords
