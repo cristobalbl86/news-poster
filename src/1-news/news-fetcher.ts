@@ -1,104 +1,41 @@
 // =============================================================
-// News Fetcher — GNews API
+// News Fetcher — Multi-source orchestrator
 //
-// Fetches trending news per channel config. ALL requests use the
-// channel's configured language (no hardcoded English).
+// Fetches news from multiple sources with fallback chain:
+//   1. GNews (primary) — es + en
+//   2. NewsData.io (fallback) — es + en
+//   3. Google News RSS (always-available backup) — es + en
 //
-// Supports real GNews categories: technology, world, science,
-// business, entertainment, health, sports, nation
+// Dual-language strategy: fetches in both the channel language
+// AND English to maximize article pool. Articles carry their
+// sourceLang so the content writer can translate as needed.
 //
-// Also supports pseudo-categories that map to country filters:
-//   "mexico" → country=mx, "latam" → country=ar (etc.)
-//
-// GNews free tier: 100 requests/day
-// API docs: https://gnews.io/docs/v4
+// Deduplicates by URL across all sources and languages.
 // =============================================================
 
-import axios from 'axios';
 import { getLogger } from '../utils/logger.js';
+import { fetchFromGNews } from './sources/gnews.js';
+import { fetchFromNewsData } from './sources/newsdata.js';
+import { fetchFromGoogleRSS } from './sources/google-rss.js';
 import type { NewsArticle, NewsCategoryOrAlias } from '../config/types.js';
 
-const GNEWS_BASE = 'https://gnews.io/api/v4';
+const MIN_ARTICLES = 8;  // minimum articles before trying next source
 
-// Real GNews categories
-const VALID_CATEGORIES = new Set([
-  'general', 'world', 'nation', 'business', 'technology',
-  'entertainment', 'sports', 'science', 'health',
-]);
-
-// Pseudo-categories that map to country filters
-const COUNTRY_ALIASES: Record<string, string> = {
-  mexico: 'mx',
-  latam: 'ar',    // Argentina as Latin America proxy
-  usa: 'us',
-  spain: 'es',
-  colombia: 'co',
-  chile: 'cl',
-  peru: 'pe',
-  brazil: 'br',
-};
-
-interface GNewsArticle {
-  title: string;
-  description: string;
-  content: string;
-  url: string;
-  image: string | null;
-  publishedAt: string;
-  source: { name: string; url: string };
-}
-
-interface GNewsResponse {
-  totalArticles: number;
-  articles: GNewsArticle[];
-}
-
-async function fetchHeadlines(
-  apiKey: string,
-  lang: string,
-  options: { category?: string; country?: string; max?: number; fromHoursAgo?: number }
-): Promise<GNewsArticle[]> {
-  const params: Record<string, string | number> = {
-    apikey: apiKey,
-    lang,
-    max: options.max ?? 10,
-  };
-
-  if (options.category) params.category = options.category;
-  if (options.country) params.country = options.country;
-  if (options.fromHoursAgo) {
-    const from = new Date(Date.now() - options.fromHoursAgo * 60 * 60 * 1000);
-    params.from = from.toISOString();
+function dedup(existing: NewsArticle[], incoming: NewsArticle[]): NewsArticle[] {
+  const seenUrls = new Set(existing.map(a => a.url));
+  const added: NewsArticle[] = [];
+  for (const article of incoming) {
+    if (!seenUrls.has(article.url)) {
+      seenUrls.add(article.url);
+      added.push(article);
+    }
   }
-
-  const response = await axios.get<GNewsResponse>(`${GNEWS_BASE}/top-headlines`, {
-    params,
-    timeout: 15000,
-  });
-  return response.data.articles || [];
-}
-
-function toNewsArticle(raw: GNewsArticle, categoryLabel: string): NewsArticle {
-  return {
-    title: raw.title,
-    description: raw.description || '',
-    content: raw.content || '',
-    url: raw.url,
-    image: raw.image || null,
-    publishedAt: raw.publishedAt,
-    source: raw.source,
-    category: categoryLabel,
-  };
+  return added;
 }
 
 /**
- * Fetch trending news for all configured categories.
- *
- * @param apiKey     GNews API key
- * @param categories Array of category names or country aliases
- * @param language   Channel language (e.g. "es", "en") — used for ALL requests
- * @param country    Optional default country filter from channel config
- * @param maxPerCategory  Max articles per category request
+ * Fetch trending news from multiple sources with fallback chain.
+ * Fetches in both channel language and English for maximum coverage.
  */
 export async function fetchTrendingNews(
   apiKey: string,
@@ -106,64 +43,59 @@ export async function fetchTrendingNews(
   language: string,
   country?: string,
   maxPerCategory: number = 10,
-  fromHoursAgo: number = 6
+  fromHoursAgo: number = 24,
+  newsdataApiKey?: string,
 ): Promise<NewsArticle[]> {
   const log = getLogger();
-
-  // Build fetch tasks for all categories
-  const fetchTasks = categories.map(cat => {
-    const catLower = cat.toLowerCase().trim();
-
-    if (COUNTRY_ALIASES[catLower]) {
-      return { catLower, promise: fetchHeadlines(apiKey, language, {
-        country: COUNTRY_ALIASES[catLower],
-        max: maxPerCategory,
-        fromHoursAgo,
-      })};
-    } else if (VALID_CATEGORIES.has(catLower)) {
-      return { catLower, promise: fetchHeadlines(apiKey, language, {
-        category: catLower,
-        country,
-        max: maxPerCategory,
-        fromHoursAgo,
-      })};
-    } else {
-      log.warn(`Unknown category "${catLower}" — skipping. Valid: ${[...VALID_CATEGORIES].join(', ')}, ${Object.keys(COUNTRY_ALIASES).join(', ')}`);
-      return null;
-    }
-  }).filter(Boolean) as { catLower: string; promise: Promise<GNewsArticle[]> }[];
-
-  log.info(`Fetching ${fetchTasks.length} categories in parallel (lang=${language}, last ${fromHoursAgo}h)...`);
-
-  // Fetch all categories in parallel
-  const settled = await Promise.allSettled(fetchTasks.map(t => t.promise));
-
   const results: NewsArticle[] = [];
-  const seenUrls = new Set<string>();
+  const langs = language === 'en' ? ['en'] : [language, 'en'];
 
-  for (let i = 0; i < settled.length; i++) {
-    const { catLower } = fetchTasks[i];
-    const outcome = settled[i];
+  log.info(`Fetching news (langs: ${langs.join('+')}, last ${fromHoursAgo}h, min ${MIN_ARTICLES} articles)...`);
 
-    if (outcome.status === 'fulfilled') {
-      const articles = outcome.value.map(a => toNewsArticle(a, catLower));
-      // Deduplicate by URL across categories
-      let added = 0;
-      for (const article of articles) {
-        if (!seenUrls.has(article.url)) {
-          seenUrls.add(article.url);
-          results.push(article);
-          added++;
-        }
-      }
-      log.info(`  → ${added} unique articles from "${catLower}" (${outcome.value.length - added} dupes skipped)`);
-    } else {
-      log.error(`Failed to fetch "${catLower}" news: ${outcome.reason?.message || outcome.reason}`);
+  // --- Source 1: GNews ---
+  log.info(`[Source 1/3] GNews...`);
+  for (let li = 0; li < langs.length; li++) {
+    if (li > 0) await new Promise(r => setTimeout(r, 5000)); // pause between languages to avoid 429
+    const lang = langs[li];
+    const isNative = lang === language;
+    const articles = await fetchFromGNews(apiKey, categories, lang, country, maxPerCategory, fromHoursAgo, isNative);
+    const unique = dedup(results, articles);
+    results.push(...unique);
+    log.info(`  GNews/${lang}: +${unique.length} unique (${results.length} total)`);
+  }
+
+  // --- Source 2: NewsData.io (if configured and still below minimum) ---
+  if (newsdataApiKey && results.length < MIN_ARTICLES) {
+    log.info(`[Source 2/3] NewsData.io (${results.length} < ${MIN_ARTICLES} articles)...`);
+    for (const lang of langs) {
+      const articles = await fetchFromNewsData(newsdataApiKey, categories, lang, country, fromHoursAgo);
+      const unique = dedup(results, articles);
+      results.push(...unique);
+      log.info(`  NewsData/${lang}: +${unique.length} unique (${results.length} total)`);
     }
+  } else if (!newsdataApiKey) {
+    log.debug('[Source 2/3] NewsData.io — skipped (no API key)');
+  } else {
+    log.info(`[Source 2/3] NewsData.io — skipped (${results.length} >= ${MIN_ARTICLES} articles)`);
+  }
+
+  // --- Source 3: Google News RSS (if still below minimum) ---
+  if (results.length < MIN_ARTICLES) {
+    log.info(`[Source 3/3] Google News RSS (${results.length} < ${MIN_ARTICLES} articles)...`);
+    for (const lang of langs) {
+      const articles = await fetchFromGoogleRSS(categories, lang, fromHoursAgo);
+      const unique = dedup(results, articles);
+      results.push(...unique);
+      log.info(`  GoogleRSS/${lang}: +${unique.length} unique (${results.length} total)`);
+    }
+  } else {
+    log.info(`[Source 3/3] Google News RSS — skipped (${results.length} >= ${MIN_ARTICLES} articles)`);
   }
 
   // Sort newest first
   results.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+
+  log.info(`Total: ${results.length} unique articles from ${[...new Set(results.map(a => a.provider))].join(', ')}`);
 
   return results;
 }

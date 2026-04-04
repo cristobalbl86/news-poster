@@ -29,7 +29,8 @@ function buildCurationPrompt(articles: NewsArticle[], config: BotConfig): string
     const ageMs = now.getTime() - new Date(a.publishedAt).getTime();
     const ageMin = Math.round(ageMs / 60000);
     const ageLabel = ageMin < 60 ? `${ageMin}m ago` : `${Math.round(ageMin / 60)}h ago`;
-    return `[${i}] "${a.title}" — ${a.description || 'No description'} (source: ${a.source.name}, category: ${a.category}, published: ${ageLabel})`;
+    const langTag = a.sourceLang && a.sourceLang !== config.language ? ` [${a.sourceLang.toUpperCase()}]` : '';
+    return `[${i}] "${a.title}" — ${a.description || 'No description'} (source: ${a.source.name}, category: ${a.category}, published: ${ageLabel})${langTag}`;
   }).join('\n');
 
   return `You are a social media editor for a Facebook page called "${config.pageDisplayName}".
@@ -37,6 +38,8 @@ The page's focus is: ${config.topicFocus}
 The audience language is: ${config.language}
 
 CRITICAL: This page competes on SPEED. Being first to post breaking news is the #1 priority.
+
+NOTE: Some articles are in English (marked [EN]). Score them equally — they will be translated before posting. Do NOT penalize articles for being in a different language.
 
 Below are ${articles.length} news articles fetched from trending headlines. Your job is to rank them by a combination of RECENCY and IMPACT. Scoring rules:
 1. **Recency is king** — articles published in the last 1-2 hours should get a +2 bonus. Articles older than 4 hours should be penalized.

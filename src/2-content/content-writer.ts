@@ -56,11 +56,17 @@ function getLanguagePrompt(lang: string) {
 
 function buildPrompt(article: NewsArticle, config: BotConfig): string {
   const lp = getLanguagePrompt(config.language);
+  const needsTranslation = article.sourceLang && article.sourceLang !== config.language;
+
+  const translationNote = needsTranslation
+    ? `\nIMPORTANT: This article is in ${article.sourceLang.toUpperCase()}. You MUST write the post in ${config.language.toUpperCase()} — translate and adapt the content naturally, do not just copy the original text.`
+    : '';
 
   return `${lp.role}
 
 Page name: "${config.pageDisplayName}"
 Page focus: ${config.topicFocus}
+${translationNote}
 
 ${lp.instructions}
 
@@ -78,7 +84,8 @@ export async function writeCaption(
   config: BotConfig
 ): Promise<string> {
   const log = getLogger();
-  log.info(`Writing caption (lang=${config.language}) for: "${article.title.slice(0, 60)}..."`);
+  const translating = article.sourceLang && article.sourceLang !== config.language;
+  log.info(`Writing caption (lang=${config.language}${translating ? `, translating from ${article.sourceLang}` : ''}) for: "${article.title.slice(0, 60)}..."`);
 
   try {
     const caption = askClaude(buildPrompt(article, config), {
