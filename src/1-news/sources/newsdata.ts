@@ -75,7 +75,7 @@ export async function fetchFromNewsData(
   categories: string[],
   lang: string,
   country?: string,
-  fromHoursAgo: number = 24,
+  _fromHoursAgo: number = 24,
 ): Promise<NewsArticle[]> {
   const log = getLogger();
   const results: NewsArticle[] = [];
@@ -91,8 +91,8 @@ export async function fetchFromNewsData(
     .filter(Boolean);
   const ndCountry = countryAliases[0] || (country ? COUNTRY_MAP[country] || country : undefined);
 
-  // NewsData supports comma-separated categories in one request
-  const categoryParam = [...new Set(ndCategories)].join(',') || 'top';
+  // NewsData free tier allows max 5 categories
+  const categoryParam = [...new Set(ndCategories)].slice(0, 5).join(',') || 'top';
 
   try {
     const params: Record<string, string | number> = {
@@ -102,7 +102,7 @@ export async function fetchFromNewsData(
       size: 10,
     };
     if (ndCountry) params.country = ndCountry;
-    if (fromHoursAgo) params.timeframe = fromHoursAgo;
+    // Note: timeframe param requires paid plan — relying on `latest` endpoint freshness
 
     const response = await axios.get<NewsDataResponse>(NEWSDATA_BASE, {
       params,

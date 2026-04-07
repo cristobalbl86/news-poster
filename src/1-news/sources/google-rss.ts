@@ -101,10 +101,11 @@ export async function fetchFromGoogleRSS(
     try {
       if (results.length > 0) await new Promise(r => setTimeout(r, 200));
 
-      const url = `https://news.google.com/rss/topics/${topic}?hl=${locale.hl}&gl=${locale.gl}&ceid=${locale.ceid}`;
+      const url = `https://news.google.com/rss/headlines/section/topic/${topic}?hl=${locale.hl}&gl=${locale.gl}&ceid=${locale.ceid}`;
       const response = await axios.get<string>(url, {
         timeout: 10000,
         responseType: 'text',
+        maxRedirects: 5,
       });
 
       const items = parseRssItems(response.data);
