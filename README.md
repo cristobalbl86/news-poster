@@ -50,6 +50,57 @@ cp .env.example .env
 | `LOG_FILE`            | No       | Log file path (default: `./logs/bot.log`)                        |
 | `DRY_RUN`             | No       | Set to `true` to skip actual Facebook posting (default: `false`) |
 
+### Telegram Post Approval (optional)
+
+When configured, each generated post is sent to your Telegram chat for manual review before publishing. You receive a message with the article info, caption, and image, along with **Approve** / **Reject** buttons. Only approved posts are published to Facebook. If you don't respond within the timeout (default: 30 minutes), the post is skipped.
+
+Leave the variables blank to disable approval and auto-publish all posts as before.
+
+| Variable                     | Required | Description                                                  |
+| ---------------------------- | -------- | ------------------------------------------------------------ |
+| `TELEGRAM_BOT_TOKEN`         | No       | Telegram Bot API token                                       |
+| `TELEGRAM_CHAT_ID`           | No       | Chat ID where approval messages are sent                     |
+| `TELEGRAM_APPROVAL_TIMEOUT`  | No       | Time to wait for a response in ms (default: `1800000` / 30 min) |
+
+#### Step 1 — Create a Telegram Bot
+
+1. Open Telegram and search for **@BotFather**
+2. Send `/newbot`
+3. Choose a display name (e.g. "News Poster Approvals")
+4. Choose a username ending in `bot` (e.g. `news_poster_approval_bot`)
+5. BotFather will reply with your **bot token** — it looks like `7123456789:AAHxyz...`
+6. Copy the token and set it as `TELEGRAM_BOT_TOKEN` in your `.env`
+
+#### Step 2 — Get your Chat ID
+
+**Option A — Private chat (just you):**
+
+1. Open a chat with your new bot and send any message (e.g. "hello")
+2. Open this URL in your browser (replace `YOUR_BOT_TOKEN` with your actual token):
+   ```
+   https://api.telegram.org/botYOUR_BOT_TOKEN/getUpdates
+   ```
+3. In the JSON response, find `"chat":{"id":123456789,...}` — that number is your chat ID
+4. Set it as `TELEGRAM_CHAT_ID` in your `.env`
+
+**Option B — Group chat (multiple reviewers):**
+
+1. Create a Telegram group and add your bot to it
+2. Send a message in the group
+3. Open the same `getUpdates` URL as above
+4. Find `"chat":{"id":-100...}` — group IDs are negative numbers
+5. Set that number as `TELEGRAM_CHAT_ID`
+
+#### Step 3 — Test the connection
+
+```bash
+curl -s -X POST "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage" \
+  -H "Content-Type: application/json" \
+  -d '{"chat_id": "YOUR_CHAT_ID", "text": "Bot connected!"}'
+```
+
+You should receive "Bot connected!" in your Telegram chat. After that, run the pipeline and each post will arrive for approval before publishing.
+
 ### 2. Channel configuration (`channels/<name>.env`)
 
 Each channel is defined by a file under `channels/`. Copy an example to get started:
@@ -142,7 +193,8 @@ news-poster/
 │   │   └── types.ts              # TypeScript type definitions
 │   └── utils/
 │       ├── claude-code-cli.ts    # Claude Code CLI wrapper
-│       └── logger.ts             # Winston logger
+│       ├── logger.ts             # Winston logger
+│       └── telegram-approval.ts  # Telegram approve/reject flow
 ├── package.json
 └── tsconfig.json
 ```

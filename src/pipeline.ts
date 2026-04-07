@@ -24,6 +24,7 @@ import { writeCaption } from './2-content/content-writer.js';
 import { resolveImage } from './3-image/image-fetcher.js';
 import { postToFacebook } from './4-post/facebook-poster.js';
 import { filterUnposted, markAsPosted } from './5-tracking/tracker.js';
+import { requestApproval, isTelegramApprovalEnabled, type ApprovalOutcome } from './utils/telegram-approval.js';
 import type { GeneratedPost, PostResult } from './config/types.js';
 
 function parseArgs(): { channel: string; dryRun: boolean } {
@@ -51,6 +52,8 @@ export async function runPipeline(channelName: string, dryRunOverride?: boolean)
   log.info(`Topic focus: ${config.topicFocus}`);
   log.info(`Max posts per run: ${config.maxPostsPerRun}`);
   if (dryRun) log.info('DRY RUN — no actual Facebook posts will be made');
+  const approvalEnabled = isTelegramApprovalEnabled(config.telegramBotToken, config.telegramChatId);
+  if (approvalEnabled) log.info('Telegram approval: ENABLED — posts require manual approval');
   log.info('='.repeat(60));
 
   const results: PostResult[] = [];
@@ -123,6 +126,37 @@ export async function runPipeline(channelName: string, dryRunOverride?: boolean)
       imageUrl,
       hashtags: config.hashtags,
     };
+
+    // --- Telegram approval gate ---
+    if (approvalEnabled) {
+      log.info('Sending to Telegram for approval...');
+      const outcome: ApprovalOutcome = await requestApproval(
+        generatedPost,
+        i + 1,
+        toPost.length,
+        config.telegramBotToken!,
+        config.telegramChatId!,
+        config.telegramApprovalTimeout
+      );
+
+      if (outcome !== 'approved') {
+        const errorMessages: Record<Exclude<ApprovalOutcome, 'approved'>, string> = {
+          rejected: 'Rejected via Telegram approval',
+          timeout: 'Timed out waiting for Telegram approval',
+          send_failed: 'Failed to send Telegram approval request',
+        };
+        const approvalError = errorMessages[outcome];
+        log.info(`Post ${i + 1}/${toPost.length} was not approved — ${approvalError} — skipping`);
+        results.push({
+          article,
+          facebookPostId: '',
+          postedAt: new Date().toISOString(),
+          success: false,
+          error: approvalError,
+        });
+        continue;
+      }
+    }
 
     const result = await postToFacebook(
       generatedPost,

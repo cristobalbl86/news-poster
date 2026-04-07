@@ -24,10 +24,30 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../');
 const log = createLogger();
 
-const PIPELINE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes max per run
+const DEFAULT_PIPELINE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes (no approval)
+const PIPELINE_OVERHEAD_MS = 2 * 60 * 1000;         // 2 min buffer for approval runs
+
+function getPipelineTimeout(channelName: string): number {
+  try {
+    const config = loadBotConfig(channelName);
+    const approvalEnabled = Boolean(config.telegramBotToken && config.telegramChatId);
+    if (approvalEnabled) {
+      // Allow enough time for each post to wait the full approval window
+      return config.telegramApprovalTimeout * config.maxPostsPerRun + PIPELINE_OVERHEAD_MS;
+    }
+  } catch {
+    // fall through to default
+  }
+  return DEFAULT_PIPELINE_TIMEOUT_MS;
+}
 
 function runPipeline(channelName: string): void {
   log.info(`[scheduler] Triggering pipeline for channel: ${channelName}`);
+
+  const pipelineTimeout = getPipelineTimeout(channelName);
+  if (pipelineTimeout > DEFAULT_PIPELINE_TIMEOUT_MS) {
+    log.info(`[scheduler] Extended timeout for ${channelName}: ${Math.round(pipelineTimeout / 60000)}min (Telegram approval enabled)`);
+  }
 
   const result = spawnSync(
     process.execPath,
@@ -35,7 +55,7 @@ function runPipeline(channelName: string): void {
     {
       cwd: ROOT,
       env: process.env,
-      timeout: PIPELINE_TIMEOUT_MS,
+      timeout: pipelineTimeout,
       stdio: 'inherit',
     }
   );
