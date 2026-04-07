@@ -116,30 +116,26 @@ export async function requestApproval(
   const previewText = buildPreviewText(post, index, total);
   const replyMarkup = buildInlineKeyboard(callbackId);
 
-  // Send post preview — use sendPhoto if image available, otherwise sendMessage
+  // Send post preview. When an image is available, send the photo first
+  // (with a short caption to stay under Telegram's 1024-char limit), then
+  // always follow up with a sendMessage containing the full preview + keyboard.
+  // The text message is the authoritative sentMessage for callback polling.
   let sentMessage: TelegramResponse;
 
-  if (post.imageUrl) {
-    sentMessage = await callTelegram(token, 'sendPhoto', {
-      chat_id: chatId,
-      photo: post.imageUrl,
-      caption: previewText,
-      parse_mode: 'HTML',
-      reply_markup: replyMarkup,
-    });
-
-    // If sendPhoto fails (e.g. image URL not accessible), fall back to sendMessage
-    if (!sentMessage.ok) {
-      log.warn(`sendPhoto failed: ${sentMessage.description} — falling back to text`);
-      sentMessage = await callTelegram(token, 'sendMessage', {
+  try {
+    if (post.imageUrl) {
+      // Send photo with a minimal caption — the full preview comes next
+      const photoResult = await callTelegram(token, 'sendPhoto', {
         chat_id: chatId,
-        text: previewText,
-        parse_mode: 'HTML',
-        reply_markup: replyMarkup,
-        disable_web_page_preview: false,
+        photo: post.imageUrl,
+        caption: `Post ${index}/${total} — Approval Required`,
       });
+      if (!photoResult.ok) {
+        log.warn(`sendPhoto failed: ${photoResult.description} — image will be omitted`);
+      }
     }
-  } else {
+
+    // Always send the full text preview with the inline keyboard
     sentMessage = await callTelegram(token, 'sendMessage', {
       chat_id: chatId,
       text: previewText,
@@ -147,6 +143,9 @@ export async function requestApproval(
       reply_markup: replyMarkup,
       disable_web_page_preview: false,
     });
+  } catch (err: any) {
+    log.error(`Failed to send Telegram approval message: ${err?.message ?? String(err)}`);
+    return 'send_failed';
   }
 
   if (!sentMessage.ok) {
@@ -169,45 +168,54 @@ export async function requestApproval(
       });
 
       if (updates.ok && Array.isArray(updates.result)) {
+        // Iterate the FULL batch first, advancing lastUpdateId on every update,
+        // so that all updates are confirmed before we act on a decision.
+        // This prevents re-delivery of unconfirmed updates on subsequent polls.
+        let decisionAction: string | null = null;
+        let decisionCb: any = null;
+
         for (const update of updates.result) {
           lastUpdateId = update.update_id;
+
+          if (decisionAction !== null) continue; // already found — just advance offset
 
           const cb = update.callback_query;
           if (!cb?.data) continue;
 
+          // Validate the callback came from the expected chat and message
+          const callbackChatId = cb.message?.chat?.id != null ? String(cb.message.chat.id) : undefined;
+          const callbackMessageId = cb.message?.message_id;
+          if (callbackChatId !== String(chatId)) continue;
+          if (callbackMessageId !== sentMessage.result?.message_id) continue;
+
           const [action, id] = cb.data.split(':');
           if (id !== callbackId) continue;
 
+          decisionAction = action;
+          decisionCb = cb;
+        }
+
+        if (decisionAction !== null && decisionCb !== null) {
           // Answer the callback to remove the loading spinner
           await callTelegram(token, 'answerCallbackQuery', {
-            callback_query_id: cb.id,
-            text: action === 'approve' ? 'Post approved!' : 'Post rejected.',
+            callback_query_id: decisionCb.id,
+            text: decisionAction === 'approve' ? 'Post approved!' : 'Post rejected.',
           });
 
-          // Update the message to reflect the decision
-          const statusText = action === 'approve'
+          // Update the message to reflect the decision and remove the keyboard
+          const statusText = decisionAction === 'approve'
             ? '\n\n<b>Status: APPROVED</b>'
             : '\n\n<b>Status: REJECTED</b>';
 
-          const editMethod = post.imageUrl && sentMessage.result?.photo
-            ? 'editMessageCaption'
-            : 'editMessageText';
-
-          const editPayload: Record<string, any> = {
+          await callTelegram(token, 'editMessageText', {
             chat_id: chatId,
             message_id: sentMessage.result.message_id,
+            text: previewText + statusText,
             parse_mode: 'HTML',
-          };
+            reply_markup: { inline_keyboard: [] }, // remove buttons
+          });
 
-          if (editMethod === 'editMessageCaption') {
-            editPayload.caption = previewText + statusText;
-          } else {
-            editPayload.text = previewText + statusText;
-          }
-
-          await callTelegram(token, editMethod, editPayload);
-
-          const outcome: ApprovalOutcome = action === 'approve' ? 'approved' : 'rejected';
+          const outcome: ApprovalOutcome = decisionAction === 'approve' ? 'approved' : 'rejected';
           log.info(`Post ${index}/${total}: ${outcome.toUpperCase()} via Telegram`);
           return outcome;
         }
@@ -223,27 +231,16 @@ export async function requestApproval(
     await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
   }
 
-  // Timeout — update message and reject
+  // Timeout — update message, remove keyboard, and reject
   log.warn(`Post ${index}/${total}: approval timed out after ${timeoutMs / 60000}min — skipping`);
 
-  const timeoutEditMethod = post.imageUrl && sentMessage.result?.photo
-    ? 'editMessageCaption'
-    : 'editMessageText';
-
-  const timeoutPayload: Record<string, any> = {
+  await callTelegram(token, 'editMessageText', {
     chat_id: chatId,
     message_id: sentMessage.result?.message_id,
+    text: previewText + '\n\n<b>Status: TIMED OUT (skipped)</b>',
     parse_mode: 'HTML',
-  };
-
-  const timeoutStatus = '\n\n<b>Status: TIMED OUT (skipped)</b>';
-  if (timeoutEditMethod === 'editMessageCaption') {
-    timeoutPayload.caption = previewText + timeoutStatus;
-  } else {
-    timeoutPayload.text = previewText + timeoutStatus;
-  }
-
-  await callTelegram(token, timeoutEditMethod, timeoutPayload).catch(() => {});
+    reply_markup: { inline_keyboard: [] }, // remove buttons
+  }).catch(() => {});
 
   return 'timeout';
 }

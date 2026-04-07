@@ -22,12 +22,13 @@
 
 ## Architecture
 
-The pipeline runs in 5 sequential stages:
+The pipeline runs in 5 sequential stages (with an optional Telegram approval gate before posting):
 1. `src/1-news/news-fetcher.ts` -- Fetch headlines from GNews API
 2. `src/5-tracking/tracker.ts` (`filterUnposted`) -- Deduplicate against 7-day tracking window
 3. `src/1-news/news-curator.ts` -- Claude AI ranks articles by relevance/impact
-4. `src/utils/telegram-approval.ts` (optional) -- Send post to Telegram with Approve/Reject buttons; wait for response
-5. `src/2-content/content-writer.ts` + `src/3-image/image-fetcher.ts` + `src/4-post/facebook-poster.ts` -- Generate caption, resolve image, post to Facebook
+4. `src/2-content/content-writer.ts` + `src/3-image/image-fetcher.ts` -- Generate caption, resolve image
+   - _(optional)_ `src/utils/telegram-approval.ts` -- Send preview to Telegram for manual Approve/Reject
+5. `src/4-post/facebook-poster.ts` -- Post to Facebook
 6. `src/5-tracking/tracker.ts` (`markAsPosted`) -- Track posted article URLs
 
 Orchestration is in `src/pipeline.ts`. The scheduler (`scheduler/local-scheduler.ts`) loads all `channels/*.env` files and cron-schedules each channel's pipeline.
