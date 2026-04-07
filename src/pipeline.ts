@@ -24,7 +24,7 @@ import { writeCaption } from './2-content/content-writer.js';
 import { resolveImage } from './3-image/image-fetcher.js';
 import { postToFacebook } from './4-post/facebook-poster.js';
 import { filterUnposted, markAsPosted } from './5-tracking/tracker.js';
-import { requestApproval, isTelegramApprovalEnabled } from './utils/telegram-approval.js';
+import { requestApproval, isTelegramApprovalEnabled, type ApprovalOutcome } from './utils/telegram-approval.js';
 import type { GeneratedPost, PostResult } from './config/types.js';
 
 function parseArgs(): { channel: string; dryRun: boolean } {
@@ -130,7 +130,7 @@ export async function runPipeline(channelName: string, dryRunOverride?: boolean)
     // --- Telegram approval gate ---
     if (approvalEnabled) {
       log.info('Sending to Telegram for approval...');
-      const approved = await requestApproval(
+      const outcome: ApprovalOutcome = await requestApproval(
         generatedPost,
         i + 1,
         toPost.length,
@@ -139,14 +139,20 @@ export async function runPipeline(channelName: string, dryRunOverride?: boolean)
         config.telegramApprovalTimeout
       );
 
-      if (!approved) {
-        log.info(`Post ${i + 1}/${toPost.length} was rejected or timed out — skipping`);
+      if (outcome !== 'approved') {
+        const errorMessages: Record<Exclude<ApprovalOutcome, 'approved'>, string> = {
+          rejected: 'Rejected via Telegram approval',
+          timeout: 'Timed out waiting for Telegram approval',
+          send_failed: 'Failed to send Telegram approval request',
+        };
+        const approvalError = errorMessages[outcome];
+        log.info(`Post ${i + 1}/${toPost.length} was not approved — ${approvalError} — skipping`);
         results.push({
           article,
           facebookPostId: '',
           postedAt: new Date().toISOString(),
           success: false,
-          error: 'Rejected via Telegram approval',
+          error: approvalError,
         });
         continue;
       }

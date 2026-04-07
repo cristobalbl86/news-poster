@@ -97,9 +97,11 @@ function buildInlineKeyboard(callbackId: string) {
   };
 }
 
+export type ApprovalOutcome = 'approved' | 'rejected' | 'timeout' | 'send_failed';
+
 /**
  * Send a post preview to Telegram and wait for approve/reject.
- * Returns true if approved, false if rejected or timed out.
+ * Returns 'approved', 'rejected', 'timeout', or 'send_failed'.
  */
 export async function requestApproval(
   post: GeneratedPost,
@@ -108,7 +110,7 @@ export async function requestApproval(
   token: string,
   chatId: string,
   timeoutMs: number = APPROVAL_TIMEOUT_MS
-): Promise<boolean> {
+): Promise<ApprovalOutcome> {
   const log = getLogger();
   const callbackId = `post_${Date.now()}_${index}`;
   const previewText = buildPreviewText(post, index, total);
@@ -149,7 +151,7 @@ export async function requestApproval(
 
   if (!sentMessage.ok) {
     log.error(`Failed to send Telegram approval message: ${sentMessage.description}`);
-    return false;
+    return 'send_failed';
   }
 
   log.info(`Telegram approval sent for post ${index}/${total} — waiting for response...`);
@@ -205,9 +207,9 @@ export async function requestApproval(
 
           await callTelegram(token, editMethod, editPayload);
 
-          const approved = action === 'approve';
-          log.info(`Post ${index}/${total}: ${approved ? 'APPROVED' : 'REJECTED'} via Telegram`);
-          return approved;
+          const outcome: ApprovalOutcome = action === 'approve' ? 'approved' : 'rejected';
+          log.info(`Post ${index}/${total}: ${outcome.toUpperCase()} via Telegram`);
+          return outcome;
         }
       }
     } catch (err: any) {
@@ -243,7 +245,7 @@ export async function requestApproval(
 
   await callTelegram(token, timeoutEditMethod, timeoutPayload).catch(() => {});
 
-  return false;
+  return 'timeout';
 }
 
 /**
