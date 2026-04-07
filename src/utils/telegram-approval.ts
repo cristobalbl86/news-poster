@@ -62,8 +62,8 @@ function buildPreviewText(post: GeneratedPost, index: number, total: number): st
     lines.push(`<b>Description:</b> ${escapeHtml(article.description)}`);
   }
   lines.push(`<b>Source:</b> ${escapeHtml(article.source.name)}`);
-  lines.push(`<b>Category:</b> ${article.category}`);
-  lines.push(`<b>Link:</b> ${article.url}`);
+  lines.push(`<b>Category:</b> ${escapeHtml(article.category)}`);
+  lines.push(`<b>Link:</b> ${escapeHtml(article.url)}`);
   lines.push('');
   lines.push('<b>Caption:</b>');
   lines.push(escapeHtml(post.caption));
@@ -73,7 +73,7 @@ function buildPreviewText(post: GeneratedPost, index: number, total: number): st
   }
   if (post.imageUrl) {
     lines.push('');
-    lines.push(`<b>Image:</b> ${post.imageUrl}`);
+    lines.push(`<b>Image:</b> ${escapeHtml(post.imageUrl)}`);
   }
 
   return lines.join('\n');
