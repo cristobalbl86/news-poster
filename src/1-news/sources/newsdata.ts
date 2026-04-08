@@ -20,6 +20,9 @@ const CATEGORY_MAP: Record<string, string> = {
   entertainment: 'entertainment',
   sports: 'sports',
   general: 'top',
+  // Aliases for friendly category names
+  ai: 'technology',
+  aerospace: 'science',
 };
 
 // Map our country aliases to NewsData country codes

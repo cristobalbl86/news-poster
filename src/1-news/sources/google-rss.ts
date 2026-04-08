@@ -18,6 +18,9 @@ const TOPIC_MAP: Record<string, string> = {
   sports: 'SPORTS',
   nation: 'NATION',
   general: 'TOP_STORIES',
+  // Aliases for friendly category names
+  ai: 'TECHNOLOGY',
+  aerospace: 'SCIENCE_AND_TECHNOLOGY',
 };
 
 // Google News locale params
