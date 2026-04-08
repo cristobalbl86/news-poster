@@ -23,7 +23,7 @@ import { curateArticles } from './1-news/news-curator.js';
 import { writeCaption } from './2-content/content-writer.js';
 import { resolveImage } from './3-image/image-fetcher.js';
 import { postToFacebook } from './4-post/facebook-poster.js';
-import { filterUnposted, markAsPosted } from './5-tracking/tracker.js';
+import { filterUnposted, markAsPosted, markAsRejected } from './5-tracking/tracker.js';
 import { requestApproval, isTelegramApprovalEnabled, type ApprovalOutcome } from './utils/telegram-approval.js';
 import type { GeneratedPost, PostResult } from './config/types.js';
 
@@ -89,7 +89,24 @@ export async function runPipeline(channelName: string, dryRunOverride?: boolean)
   // --- Stage 3: Claude curates by impact ---
   log.info('\n[3/5] Claude curating articles by impact...');
   const curated = await curateArticles(freshArticles, config);
-  let toPost = curated.slice(0, config.maxPostsPerRun);
+
+  // Select articles with category spread — avoid posting the same category twice
+  const toPost: typeof curated = [];
+  const usedCategories = new Set<string>();
+  for (const article of curated) {
+    if (toPost.length >= config.maxPostsPerRun) break;
+    if (!usedCategories.has(article.category)) {
+      toPost.push(article);
+      usedCategories.add(article.category);
+    } else if (toPost.length < config.maxPostsPerRun) {
+      // Allow category repeat only if we're short on articles
+      const remaining = curated.filter(a => !toPost.includes(a));
+      const anyFreshCategory = remaining.some(a => !usedCategories.has(a.category));
+      if (!anyFreshCategory) {
+        toPost.push(article);
+      }
+    }
+  }
 
   // Guarantee at least 1 article in the channel's native language
   const hasNative = toPost.some(a => a.sourceLang === config.language);
@@ -147,6 +164,16 @@ export async function runPipeline(channelName: string, dryRunOverride?: boolean)
         };
         const approvalError = errorMessages[outcome];
         log.info(`Post ${i + 1}/${toPost.length} was not approved — ${approvalError} — skipping`);
+
+        // Track rejected/timed-out articles so they aren't suggested again
+        if (outcome === 'rejected' || outcome === 'timeout') {
+          markAsRejected({
+            articleUrl: article.url,
+            title: article.title,
+            reason: approvalError,
+          });
+        }
+
         results.push({
           article,
           facebookPostId: '',

@@ -21,6 +21,7 @@ interface CurationResult {
   index: number;
   score: number;
   reason: string;
+  topicCluster?: string;
 }
 
 function buildCurationPrompt(articles: NewsArticle[], config: BotConfig): string {
@@ -41,22 +42,27 @@ CRITICAL: This page competes on SPEED. Being first to post breaking news is the 
 
 NOTE: Some articles are in English (marked [EN]). Score them equally — they will be translated before posting. Do NOT penalize articles for being in a different language.
 
-Below are ${articles.length} news articles fetched from trending headlines. Your job is to rank them by a combination of RECENCY and IMPACT. Scoring rules:
+Below are ${articles.length} news articles fetched from trending headlines. Your job is to rank them by a combination of RECENCY and GLOBAL IMPACT. Scoring rules:
 1. **Recency is king** — articles published in the last 1-2 hours should get a +2 bonus. Articles older than 4 hours should be penalized.
 2. **Breaking news** — developing stories, "just in" events, or first reports should score highest.
-3. **Impact & engagement** — how impactful, surprising, or emotionally compelling is the story for the audience?
-4. **Relevance** — how well does it match the page's topic focus?
-5. **Skip** — stories that are too niche, too old, clickbait with no substance, or duplicates of the same event.
+3. **GLOBAL impact only** — the story must matter to a worldwide audience or to Mexico/Latin America specifically. Examples of GLOBAL impact: wars, major geopolitical events, US/China/EU/Russia news, big tech (Google, OpenAI, Apple, Meta, Tesla, SpaceX), AI breakthroughs, global markets/economy, climate disasters, major scientific discoveries, world-famous figures.
+4. **STRICTLY SKIP regional/local stories** from countries that aren't globally influential — score them 1-3. This includes hyper-local news from Uganda, Ireland, India (unless the story has worldwide implications), Philippines, Nigeria, Kenya, Pakistan, Bangladesh, regional politics in small countries, local sports, local crime, local elections, etc. A story is only relevant if it would be covered by major international outlets like Reuters, BBC, AP, AFP.
+5. **Mexico/US/Latam exception** — Mexico-specific stories ARE relevant (this is a Mexican audience). Latin America/US stories with significance are also relevant.
+6. **Topic focus match** — prioritize stories matching the page focus: ${config.topicFocus}
+7. **Skip** — stories that are too niche, too local, too old, clickbait, duplicates, or pure entertainment gossip.
 
 Articles:
 ${articleList}
+
+**DEDUPLICATION RULE**: If multiple articles cover the same event or story (e.g., several articles about the same war, the same product launch, the same person), include ONLY the single best one. Do not return near-duplicates — variety across different topics is required.
 
 Return a JSON array of objects, one per article, with:
 - "index": the article number [0..${articles.length - 1}]
 - "score": score from 1 (skip) to 10 (must post NOW) — weight recency heavily
 - "reason": one sentence explaining why (in ${config.language})
+- "topicCluster": a short label for the story topic (e.g., "Iran war", "Apple earnings", "OpenAI GPT-5") — used to prevent duplicate posts
 
-Sort the array by score descending (highest first). Only include articles with score >= 5.`;
+Sort the array by score descending (highest first). Only include articles with score >= 5. Never include two articles with the same topicCluster.`;
 }
 
 export async function curateArticles(
@@ -83,8 +89,16 @@ export async function curateArticles(
     });
 
     const curated: CuratedArticle[] = [];
+    const seenClusters = new Set<string>();
     for (const r of results) {
       if (r.index >= 0 && r.index < articles.length && r.score >= 5) {
+        // Client-side dedup: skip if same topic cluster already included
+        const cluster = r.topicCluster?.toLowerCase().trim();
+        if (cluster && seenClusters.has(cluster)) {
+          log.info(`  Skipping duplicate topic cluster "${r.topicCluster}"`);
+          continue;
+        }
+        if (cluster) seenClusters.add(cluster);
         curated.push({
           ...articles[r.index],
           relevanceScore: r.score,
