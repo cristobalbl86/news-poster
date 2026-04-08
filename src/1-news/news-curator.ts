@@ -48,7 +48,7 @@ Below are ${articles.length} news articles fetched from trending headlines. Your
 3. **GLOBAL impact only** — the story must matter to a worldwide audience or to Mexico/Latin America specifically. Examples of GLOBAL impact: wars, major geopolitical events, US/China/EU/Russia news, big tech (Google, OpenAI, Apple, Meta, Tesla, SpaceX), AI breakthroughs, global markets/economy, climate disasters, major scientific discoveries, world-famous figures.
 4. **STRICTLY SKIP regional/local stories** from countries that aren't globally influential — score them 1-3. This includes hyper-local news from Uganda, Ireland, India (unless the story has worldwide implications), Philippines, Nigeria, Kenya, Pakistan, Bangladesh, regional politics in small countries, local sports, local crime, local elections, etc. A story is only relevant if it would be covered by major international outlets like Reuters, BBC, AP, AFP.
 5. **Mexico/US/Latam exception** — Mexico-specific stories ARE relevant (this is a Mexican audience). Latin America/US stories with significance are also relevant.
-6. **Topic focus match** — prioritize stories matching the page focus: ${config.topicFocus}
+6. **Topic focus match** — prioritize stories matching the page focus: ${config.topicFocus}. EXCEPTION: For sports results (match results, standings, athlete news) and science/space milestones (missions, discoveries, launches), do NOT apply the age penalty from rule 1 — a Champions League result or a space mission update is still worth posting at 4-6 hours old.
 7. **Skip** — stories that are too niche, too local, too old, clickbait, duplicates, or pure entertainment gossip.
 
 Articles:

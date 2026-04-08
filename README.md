@@ -4,11 +4,11 @@ AI-powered news aggregation and posting pipeline that fetches trending articles 
 
 ## Pipeline Stages
 
-1. **Fetch** -- Retrieve trending news from multiple sources (GNews -> NewsData.io -> Google News RSS) in both Spanish and English
-2. **Deduplicate** -- Filter out articles already posted in the last 7 days
-3. **Curate** -- Claude AI ranks articles by impact, virality, and relevance to the channel's topic focus
-4. **Generate & Post** -- For each top article: write a caption (Claude), resolve an image (article image -> Pexels fallback -> link-only), post to Facebook, and track the URL
-5. **Track** -- Persist posted articles in a JSON rolling window (max 1000 entries) to prevent duplicates
+1. **Fetch** -- Retrieve trending news from multiple sources (GNews → NewsData.io → Google News RSS fallback chain) in both the channel's native language and English
+2. **Deduplicate** -- Filter out articles posted in the last 7 days and articles previously rejected via Telegram (30-day window)
+3. **Curate** -- Claude AI scores articles by recency and global impact, deduplicates by topic cluster (no repeated stories per run), and ranks by relevance to the channel's topic focus
+4. **Generate & Post** -- For each top article: write a caption (Claude, with translation if needed), resolve an image (article image → Pexels fallback → link-only), optionally send to Telegram for approval, then post to Facebook
+5. **Track** -- Persist posted and rejected article URLs in JSON rolling windows to prevent future duplicates
 
 ## Prerequisites
 
@@ -121,7 +121,7 @@ cp channels/tech-pulse-en.env.example channels/tech-pulse-en.env
 | `FACEBOOK_PAGE_ID`      | Yes      | Your Facebook Page ID                                                                             |
 | `FACEBOOK_ACCESS_TOKEN` | Yes      | Long-lived Facebook Page access token                                                             |
 | `POSTING_SCHEDULE`      | No       | Cron expression for the scheduler (default: `0 */3 * * *` -- every 3 hours)                       |
-| `MAX_POSTS_PER_RUN`     | No       | Max articles to post per pipeline run (default: `2`)                                              |
+| `MAX_POSTS_PER_RUN`     | No       | Max articles to post per pipeline run (default: `2`; recommended: `6` for full category coverage) |
 | `HASHTAGS`              | No       | Hashtags appended to every post (e.g. `#tech #AI #news`)                                          |
 
 #### Supported news categories
@@ -129,6 +129,10 @@ cp channels/tech-pulse-en.env.example channels/tech-pulse-en.env
 **Real GNews categories:** `general`, `world`, `nation`, `business`, `technology`, `entertainment`, `sports`, `science`, `health`
 
 **Country aliases** (pseudo-categories that fetch general headlines from that country): `mexico`, `latam`, `usa`, `spain`, `colombia`, `chile`, `peru`, `brazil`
+
+**Friendly aliases** (automatically mapped to the correct API category): `ai` → `technology`, `aerospace` → `science`
+
+The pipeline enforces **category spread** — it picks at most one article per category per run, so posts cover different topics rather than repeating the same story.
 
 ### Adding a new channel
 
@@ -176,18 +180,22 @@ news-poster/
 ├── scheduler/
 │   └── local-scheduler.ts        # Cron-based multi-channel scheduler
 ├── src/
-│   ├── pipeline.ts               # Main orchestration (5-stage workflow)
+│   ├── pipeline.ts               # Main orchestration (5-stage workflow + category spread)
 │   ├── 1-news/
-│   │   ├── news-fetcher.ts       # GNews API integration
-│   │   └── news-curator.ts       # Claude AI article ranking
+│   │   ├── news-fetcher.ts       # Fetch orchestrator (GNews → NewsData.io → Google RSS)
+│   │   ├── news-curator.ts       # Claude AI ranking with topic deduplication
+│   │   └── sources/
+│   │       ├── gnews.ts          # GNews API (primary, 100 req/day free)
+│   │       ├── newsdata.ts       # NewsData.io (fallback, 200 req/day free)
+│   │       └── google-rss.ts     # Google News RSS (backup, unlimited)
 │   ├── 2-content/
-│   │   └── content-writer.ts     # Claude AI caption generation
+│   │   └── content-writer.ts     # Claude AI caption generation + translation
 │   ├── 3-image/
-│   │   └── image-fetcher.ts      # Image resolution (article -> Pexels -> null)
+│   │   └── image-fetcher.ts      # Image resolution (article → Pexels → null)
 │   ├── 4-post/
 │   │   └── facebook-poster.ts    # Meta Graph API v21.0 posting
 │   ├── 5-tracking/
-│   │   └── tracker.ts            # Dedup tracking (7-day rolling JSON)
+│   │   └── tracker.ts            # Posted (7-day) and rejected (30-day) URL tracking
 │   ├── config/
 │   │   ├── load-config.ts        # Multi-channel config loader
 │   │   └── types.ts              # TypeScript type definitions

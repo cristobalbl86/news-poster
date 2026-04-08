@@ -14,6 +14,12 @@ const VALID_CATEGORIES = new Set([
   'entertainment', 'sports', 'science', 'health',
 ]);
 
+// Map pseudo-categories to real GNews categories so channel configs can use friendly names
+const CATEGORY_ALIASES: Record<string, string> = {
+  ai: 'technology',
+  aerospace: 'science',
+};
+
 const COUNTRY_ALIASES: Record<string, string> = {
   mexico: 'mx',
   latam: 'ar',
@@ -82,8 +88,9 @@ function toNewsArticle(raw: GNewsArticle, category: string, lang: string): NewsA
 
 export function resolveCategory(cat: string): { type: 'category'; value: string; country?: undefined } | { type: 'country'; value: string } | null {
   const catLower = cat.toLowerCase().trim();
-  if (COUNTRY_ALIASES[catLower]) return { type: 'country', value: COUNTRY_ALIASES[catLower] };
-  if (VALID_CATEGORIES.has(catLower)) return { type: 'category', value: catLower };
+  const resolved = CATEGORY_ALIASES[catLower] ?? catLower;
+  if (COUNTRY_ALIASES[resolved]) return { type: 'country', value: COUNTRY_ALIASES[resolved] };
+  if (VALID_CATEGORIES.has(resolved)) return { type: 'category', value: resolved };
   return null;
 }
 
