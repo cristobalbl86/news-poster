@@ -23,6 +23,14 @@ const TOPIC_MAP: Record<string, string> = {
   aerospace: 'SCIENCE_AND_TECHNOLOGY',
 };
 
+// Search queries for pseudo-categories — fetches articles mentioning these topics
+// from ANY source, including international outlets covering a country.
+const SEARCH_MAP: Record<string, string[]> = {
+  mexico: ['Mexico'],
+  latam: ['América Latina OR Latin America'],
+  brazil: ['Brasil OR Brazil'],
+};
+
 // Google News locale params
 const LOCALE_MAP: Record<string, { hl: string; gl: string; ceid: string }> = {
   es: { hl: 'es-419', gl: 'MX', ceid: 'MX:es-419' },
@@ -128,6 +136,40 @@ export async function fetchFromGoogleRSS(
       results.push(...articles);
     } catch (err: any) {
       log.error(`  [google-rss/${lang}] Failed "${topic}": ${err.message}`);
+    }
+  }
+
+  // Fetch search-query feeds for pseudo-categories (e.g. "mexico" → search q=Mexico)
+  // These capture international outlets covering a country, not just local sources.
+  const searchCategories = categories
+    .map(c => c.toLowerCase().trim())
+    .filter(c => SEARCH_MAP[c]);
+
+  for (const cat of [...new Set(searchCategories)]) {
+    for (const q of SEARCH_MAP[cat]) {
+      try {
+        await new Promise(r => setTimeout(r, 200));
+
+        const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=${locale.hl}&gl=${locale.gl}&ceid=${locale.ceid}`;
+        const response = await axios.get<string>(url, {
+          timeout: 10000,
+          responseType: 'text',
+          maxRedirects: 5,
+        });
+
+        const items = parseRssItems(response.data);
+
+        const recent = items.filter(item => {
+          if (!item.pubDate) return true;
+          return new Date(item.pubDate).getTime() > cutoff;
+        });
+
+        const articles = recent.slice(0, 10).map(item => toNewsArticle(item, cat, lang));
+        log.info(`  [google-rss/${lang}] ${articles.length} articles from search "${q}"`);
+        results.push(...articles);
+      } catch (err: any) {
+        log.error(`  [google-rss/${lang}] Failed search "${q}": ${err.message}`);
+      }
     }
   }
 
