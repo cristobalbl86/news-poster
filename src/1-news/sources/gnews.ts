@@ -31,6 +31,17 @@ const COUNTRY_ALIASES: Record<string, string> = {
   brazil: 'br',
 };
 
+// Search queries to run alongside country-alias top-headlines.
+// Fetches international coverage OF these countries, not just FROM them.
+const COUNTRY_SEARCH_QUERIES: Record<string, string[]> = {
+  mexico: ['México OR Mexico'],
+  latam: ['América Latina OR Latin America'],
+  brazil: ['Brasil OR Brazil'],
+  colombia: ['Colombia'],
+  chile: ['Chile'],
+  peru: ['Perú OR Peru'],
+};
+
 interface GNewsArticle {
   title: string;
   description: string;
@@ -65,6 +76,31 @@ async function fetchHeadlines(
   }
 
   const response = await axios.get<GNewsResponse>(`${GNEWS_BASE}/top-headlines`, {
+    params,
+    timeout: 15000,
+  });
+  return response.data.articles || [];
+}
+
+async function fetchSearch(
+  apiKey: string,
+  q: string,
+  lang: string,
+  options: { max?: number; fromHoursAgo?: number }
+): Promise<GNewsArticle[]> {
+  const params: Record<string, string | number> = {
+    apikey: apiKey,
+    q,
+    lang,
+    max: options.max ?? 5,
+  };
+
+  if (options.fromHoursAgo) {
+    const from = new Date(Date.now() - options.fromHoursAgo * 60 * 60 * 1000);
+    params.from = from.toISOString();
+  }
+
+  const response = await axios.get<GNewsResponse>(`${GNEWS_BASE}/search`, {
     params,
     timeout: 15000,
   });
@@ -125,6 +161,18 @@ export async function fetchFromGNews(
       let raw: GNewsArticle[];
       if (resolved.type === 'country') {
         raw = await fetchHeadlines(apiKey, lang, { country: resolved.value, max: maxPerCategory, fromHoursAgo });
+
+        // Also search for international coverage OF this country (news about it, not just from it)
+        const catKey = cat.toLowerCase().trim();
+        const searchQueries = COUNTRY_SEARCH_QUERIES[catKey];
+        if (searchQueries && isNativeLang) {
+          for (const q of searchQueries) {
+            await new Promise(r => setTimeout(r, 1000));
+            const searchRaw = await fetchSearch(apiKey, q, lang, { max: Math.ceil(maxPerCategory / 2), fromHoursAgo });
+            raw = [...raw, ...searchRaw];
+            log.info(`  [gnews/${lang}] +${searchRaw.length} articles from search "${q}"`);
+          }
+        }
       } else {
         // Only apply country filter for native language
         const countryFilter = isNativeLang ? country : undefined;

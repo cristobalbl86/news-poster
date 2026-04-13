@@ -90,22 +90,48 @@ export async function runPipeline(channelName: string, dryRunOverride?: boolean)
   log.info('\n[3/5] Claude curating articles by impact...');
   const curated = await curateArticles(freshArticles, config);
 
-  // Select articles with category spread — avoid posting the same category twice
+  // Select articles with category spread — allow up to 3 per category so that
+  // a dominant category (e.g. 'mexico' with many high-scoring articles) can
+  // contribute multiple posts without crowding out everything else.
+  const MAX_PER_CATEGORY = 3;
   const toPost: typeof curated = [];
-  const usedCategories = new Set<string>();
+  const categoryCounts = new Map<string, number>();
   for (const article of curated) {
     if (toPost.length >= config.maxPostsPerRun) break;
-    if (!usedCategories.has(article.category)) {
+    const count = categoryCounts.get(article.category) ?? 0;
+    if (count < MAX_PER_CATEGORY) {
       toPost.push(article);
-      usedCategories.add(article.category);
-    } else if (toPost.length < config.maxPostsPerRun) {
-      // Allow category repeat only if we're short on articles
-      const remaining = curated.filter(a => !toPost.includes(a));
-      const anyFreshCategory = remaining.some(a => !usedCategories.has(a.category));
-      if (!anyFreshCategory) {
-        toPost.push(article);
+      categoryCounts.set(article.category, count + 1);
+    }
+  }
+
+  // Guarantee at least 3 'mexico' articles per run (primary focus of this channel).
+  // If the spread didn't pick enough, add the next best Mexico articles from curated.
+  // If the run is already full (maxPostsPerRun), replace the lowest-scored non-Mexico
+  // article to make room.
+  const MIN_MEXICO = 3;
+  const mexicoCount = () => toPost.filter(a => a.category === 'mexico').length;
+  if (mexicoCount() < MIN_MEXICO) {
+    const mexicoCandidates = curated.filter(a => a.category === 'mexico' && !toPost.includes(a));
+    const needed = Math.min(MIN_MEXICO - mexicoCount(), mexicoCandidates.length);
+    for (let i = 0; i < needed; i++) {
+      const candidate = mexicoCandidates[i];
+      if (toPost.length < config.maxPostsPerRun) {
+        toPost.push(candidate);
+      } else {
+        // Replace the lowest-scored non-mexico article to make room
+        let replaceIdx = -1;
+        let lowestScore = Infinity;
+        for (let j = toPost.length - 1; j >= 0; j--) {
+          if (toPost[j].category !== 'mexico' && toPost[j].relevanceScore <= lowestScore) {
+            lowestScore = toPost[j].relevanceScore;
+            replaceIdx = j;
+          }
+        }
+        if (replaceIdx !== -1) toPost.splice(replaceIdx, 1, candidate);
       }
     }
+    log.info(`Mexico guarantee: ${mexicoCount()} Mexico articles in selection`);
   }
 
   // Guarantee at least 1 article in the channel's native language
