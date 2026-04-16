@@ -74,7 +74,7 @@ The audience language is: ${config.language}
 
 CRITICAL: This page competes on SPEED. Being first to post breaking news is the #1 priority.
 
-NOTE: Some articles are in English (marked [EN]). Score them equally — they will be translated before posting. Do NOT penalize articles for being in a different language.
+NOTE: Some articles are in a different language (marked with tags like [EN]). Score them equally — they are automatically translated before posting. Do NOT penalize articles for being in a different language.
 
 Below are ${articles.length} news articles fetched from trending headlines. Your job is to rank them by a combination of RECENCY and IMPACT. Scoring rules:
 1. **Recency is king** — articles published in the last 1-2 hours should get a +2 bonus. Articles older than 4 hours should be penalized.

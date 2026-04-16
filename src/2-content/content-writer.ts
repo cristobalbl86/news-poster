@@ -7,6 +7,7 @@
 // =============================================================
 
 import { askClaude } from '../utils/claude-code-cli.js';
+import { translateArticle } from '../utils/translator.js';
 import { getLogger } from '../utils/logger.js';
 import type { NewsArticle, BotConfig } from '../config/types.js';
 
@@ -54,25 +55,19 @@ function getLanguagePrompt(lang: string) {
   return LANGUAGE_PROMPTS[lang] || LANGUAGE_PROMPTS['en'];
 }
 
-function buildPrompt(article: NewsArticle, config: BotConfig): string {
+function buildPrompt(title: string, description: string, article: NewsArticle, config: BotConfig): string {
   const lp = getLanguagePrompt(config.language);
-  const needsTranslation = article.sourceLang && article.sourceLang !== config.language;
-
-  const translationNote = needsTranslation
-    ? `\nIMPORTANT: This article is in ${article.sourceLang.toUpperCase()}. You MUST write the post in ${config.language.toUpperCase()} — translate and adapt the content naturally, do not just copy the original text.`
-    : '';
 
   return `${lp.role}
 
 Page name: "${config.pageDisplayName}"
 Page focus: ${config.topicFocus}
-${translationNote}
 
 ${lp.instructions}
 
 News article:
-Title: ${article.title}
-Description: ${article.description}
+Title: ${title}
+Description: ${description}
 Source: ${article.source.name}
 Category: ${article.category}
 
@@ -84,18 +79,32 @@ export async function writeCaption(
   config: BotConfig
 ): Promise<string> {
   const log = getLogger();
-  const translating = article.sourceLang && article.sourceLang !== config.language;
-  log.info(`Writing caption (lang=${config.language}${translating ? `, translating from ${article.sourceLang}` : ''}) for: "${article.title.slice(0, 60)}..."`);
+  const needsTranslation = article.sourceLang && article.sourceLang !== config.language;
+  log.info(`Writing caption (lang=${config.language}${needsTranslation ? `, translating from ${article.sourceLang}` : ''}) for: "${article.title.slice(0, 60)}..."`);
 
   try {
-    const caption = askClaude(buildPrompt(article, config), {
+    let title = article.title;
+    let description = article.description;
+
+    if (needsTranslation) {
+      const translated = await translateArticle(
+        article.title,
+        article.description,
+        article.sourceLang,
+        config.language
+      );
+      title = translated.translatedTitle;
+      description = translated.translatedDescription;
+      log.info(`Translated title: "${title.slice(0, 60)}..."`);
+    }
+
+    const caption = askClaude(buildPrompt(title, description, article, config), {
       claudePath: config.claudeCodePath,
       timeoutMs: config.claudeCodeTimeout,
     });
     return caption.replace(/^["'"]|["'"]$/g, '').trim();
   } catch (err: any) {
     log.error(`Failed to write caption: ${err.message}`);
-    // Fallback: use title + description directly
     const fallback = `${article.title}. ${article.description || ''}`.slice(0, 280).trim();
     log.info(`Using fallback caption: "${fallback.slice(0, 60)}..."`);
     return fallback;
