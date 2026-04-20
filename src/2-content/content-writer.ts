@@ -1,12 +1,12 @@
 // =============================================================
-// Content Writer — Claude generates Facebook captions
+// Content Writer — GitHub Copilot generates Facebook captions
 //
 // Language-aware: uses channel's configured language.
 // Style: short, punchy, breaking-news tone (like epicentro page)
 // Format: 2-4 sentences, no hashtags (added separately)
 // =============================================================
 
-import { askClaude } from '../utils/claude-code-cli.js';
+import { askCopilot } from '../utils/copilot-cli.js';
 import { translateArticle } from '../utils/translator.js';
 import { getLogger } from '../utils/logger.js';
 import type { NewsArticle, BotConfig } from '../config/types.js';
@@ -98,9 +98,9 @@ export async function writeCaption(
       log.info(`Translated title: "${title.slice(0, 60)}..."`);
     }
 
-    const caption = askClaude(buildPrompt(title, description, article, config), {
-      claudePath: config.claudeCodePath,
-      timeoutMs: config.claudeCodeTimeout,
+    const caption = await askCopilot(buildPrompt(title, description, article, config), {
+      model: config.copilotModel,
+      timeoutMs: config.copilotTimeout,
     });
     return caption.replace(/^["'"]|["'"]$/g, '').trim();
   } catch (err: any) {

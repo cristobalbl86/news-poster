@@ -1,28 +1,29 @@
 // =============================================================
-// News Curator — Claude AI ranks articles by impact
+// News Curator — GitHub Copilot ranks articles by impact
 //
 // Why not just use newest-first? Because:
 //   - News APIs return whatever's trending, but not all stories
 //     are equally impactful or engaging for Facebook.
-//   - Claude evaluates each article for virality, relevance to
+//   - Copilot evaluates each article for virality, relevance to
 //     the channel's topic focus, and audience impact.
 //   - This gives much better post quality than blind date sorting.
 //
-// This is why we use GNews + Claude together:
+// This is why we use GNews + Copilot together:
 //   GNews → reliable structured data, images, real-time
-//   Claude → intelligent curation, engagement ranking
+//   Copilot → intelligent curation, engagement ranking
 // =============================================================
 
-import { askClaudeJson } from '../utils/claude-code-cli.js';
+import { askCopilotJson } from '../utils/copilot-cli.js';
 import { getLogger } from '../utils/logger.js';
 import type { NewsArticle, CuratedArticle, BotConfig } from '../config/types.js';
 
-// Hard cap on articles sent to Claude — keeps prompt small and prevents timeouts.
+// Hard cap on articles sent to Copilot — keeps prompt small and prevents timeouts.
 // Pre-selection ensures Mexico-category articles always have guaranteed slots.
 const MAX_ARTICLES_FOR_CURATION = 20;
 
-// Minimum timeout for curation regardless of channel config — curation is slow by design.
-const MIN_CURATION_TIMEOUT_MS = 150_000; // 2.5 minutes
+// Minimum timeout for curation regardless of channel config — curation involves
+// a large prompt and may take several seconds.
+const MIN_CURATION_TIMEOUT_MS = 60_000; // 1 minute
 
 interface CurationResult {
   index: number;
@@ -31,7 +32,7 @@ interface CurationResult {
 }
 
 /**
- * Pre-select articles before sending to Claude.
+ * Pre-select articles before sending to Copilot.
  * Guarantees Mexico-category articles get up to 1/3 of available slots,
  * then fills remaining slots with other articles by recency.
  */
@@ -50,7 +51,7 @@ function preselectArticles(articles: NewsArticle[], max: number): NewsArticle[] 
     ...otherArticles.slice(0, otherSlots),
   ];
 
-  // Re-sort by recency so Claude sees a coherent newest-first list
+  // Re-sort by recency so Copilot sees a coherent newest-first list
   selected.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
   return selected;
 }
@@ -116,13 +117,13 @@ export async function curateArticles(
   }
 
   const toSend = preselectArticles(articles, MAX_ARTICLES_FOR_CURATION);
-  log.info(`Curating ${toSend.length}/${articles.length} articles with Claude (pre-selected)...`);
+  log.info(`Curating ${toSend.length}/${articles.length} articles with Copilot (pre-selected)...`);
 
   try {
     const prompt = buildCurationPrompt(toSend, config);
-    const timeoutMs = Math.max(config.claudeCodeTimeout, MIN_CURATION_TIMEOUT_MS);
-    const results = askClaudeJson<CurationResult[]>(prompt, {
-      claudePath: config.claudeCodePath,
+    const timeoutMs = Math.max(config.copilotTimeout, MIN_CURATION_TIMEOUT_MS);
+    const results = await askCopilotJson<CurationResult[]>(prompt, {
+      model: config.copilotModel,
       timeoutMs,
     });
 
@@ -155,8 +156,7 @@ export async function curateArticles(
 
     return curated;
   } catch (err: any) {
-    log.error(`Curation failed: ${err.message} — falling back to newest-first`);
-    // Fallback: return all articles with neutral score
+    log.error(`Curation failed: ${err.message} — falling back to newest-first`);    // Fallback: return all articles with neutral score
     return articles.map(a => ({ ...a, relevanceScore: 5, curatedReason: 'Curation failed — default' }));
   }
 }

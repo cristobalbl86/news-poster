@@ -8,7 +8,7 @@
 
 - **Runtime:** Node.js (>= 18) with TypeScript (ES2022, ESNext modules)
 - **Execution:** `tsx` for direct TypeScript execution (no build step needed)
-- **APIs:** GNews API (news), Meta Graph API v21.0 (Facebook posting), Pexels API (image fallback), Claude Code CLI (AI curation and caption writing)
+- **APIs:** GNews API (news), Meta Graph API v21.0 (Facebook posting), Pexels API (image fallback), GitHub Models API (AI curation and caption writing via Copilot)
 - **Dependencies:** axios, dotenv, node-cron, winston
 
 ## Build & Run Commands
@@ -25,8 +25,8 @@
 The pipeline runs in 5 sequential stages (with an optional Telegram approval gate before posting):
 1. `src/1-news/news-fetcher.ts` -- Fetch headlines from GNews API
 2. `src/5-tracking/tracker.ts` (`filterUnposted`) -- Deduplicate against 7-day tracking window
-3. `src/1-news/news-curator.ts` -- Claude AI ranks articles by relevance/impact
-4. `src/2-content/content-writer.ts` + `src/3-image/image-fetcher.ts` -- Generate caption, resolve image
+3. `src/1-news/news-curator.ts` -- GitHub Copilot ranks articles by relevance/impact
+4. `src/2-content/content-writer.ts` + `src/3-image/image-fetcher.ts` -- Generate caption (Copilot), resolve image
    - _(optional)_ `src/utils/telegram-approval.ts` -- Send preview to Telegram for manual Approve/Reject before posting
 5. `src/4-post/facebook-poster.ts` -- Post to Facebook
 6. `src/5-tracking/tracker.ts` (`markAsPosted`) -- Track posted article URLs
@@ -36,7 +36,7 @@ Orchestration is in `src/pipeline.ts`. The scheduler (`scheduler/local-scheduler
 ## Configuration
 
 Two-layer `.env` system:
-- Root `.env` -- shared keys (GNEWS_API_KEY, CLAUDE_CODE_PATH, PEXELS_API_KEY, LOG_LEVEL, DRY_RUN)
+- Root `.env` -- shared keys (GNEWS_API_KEY, GITHUB_TOKEN, COPILOT_MODEL, COPILOT_TIMEOUT, PEXELS_API_KEY, LOG_LEVEL, DRY_RUN)
 - `channels/<name>.env` -- per-channel settings (LANGUAGE, COUNTRY, NEWS_CATEGORIES, TOPIC_FOCUS, FACEBOOK_PAGE_ID, FACEBOOK_ACCESS_TOKEN, POSTING_SCHEDULE, MAX_POSTS_PER_RUN, HASHTAGS)
 
 Config is loaded in `src/config/load-config.ts`. Types are defined in `src/config/types.ts`.
