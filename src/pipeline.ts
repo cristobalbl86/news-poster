@@ -8,9 +8,9 @@
 // Flow per run:
 //   1. Fetch trending news (per channel categories + language)
 //   2. Filter already-posted articles (7-day dedup window)
-//   3. Claude curates/ranks articles by impact & relevance
+//   3. Copilot curates/ranks articles by impact & relevance
 //   4. For top N articles:
-//      a. Write caption in channel's language (Claude)
+//      a. Write caption in channel's language (Copilot)
 //      b. Resolve image (article image → Pexels → null)
 //      c. Post to Facebook (photo post or link post)
 //      d. Track posted URL
@@ -86,8 +86,8 @@ export async function runPipeline(channelName: string, dryRunOverride?: boolean)
     return results;
   }
 
-  // --- Stage 3: Claude curates by impact ---
-  log.info('\n[3/5] Claude curating articles by impact...');
+  // --- Stage 3: Copilot curates by impact ---
+  log.info('\n[3/5] Copilot curating articles by impact...');
   const curated = await curateArticles(freshArticles, config);
 
   // Select articles with category spread — allow up to 3 per category so that

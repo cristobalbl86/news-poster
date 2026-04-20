@@ -34,7 +34,7 @@ function loadEnvFile(filePath: string): Record<string, string> {
 }
 
 export function loadBotConfig(channelName: string): BotConfig {
-  // Load shared .env first (API keys, Claude path, Pexels, etc.)
+  // Load shared .env first (API keys, Copilot model, Pexels, etc.)
   loadDotenv({ path: resolve(ROOT, '.env') });
 
   // Load channel-specific env (channel values override shared)
@@ -47,6 +47,9 @@ export function loadBotConfig(channelName: string): BotConfig {
 
   const gnewsApiKey = e.GNEWS_API_KEY;
   if (!gnewsApiKey) throw new Error('GNEWS_API_KEY is required in .env');
+
+  const githubToken = e.GITHUB_TOKEN;
+  if (!githubToken) throw new Error('GITHUB_TOKEN is required in .env');
 
   const facebookPageId = e.FACEBOOK_PAGE_ID;
   if (!facebookPageId) throw new Error('FACEBOOK_PAGE_ID is required in channels config');
@@ -80,8 +83,9 @@ export function loadBotConfig(channelName: string): BotConfig {
     gnewsApiKey,
     newsdataApiKey: e.NEWSDATA_API_KEY,
     pexelsApiKey: e.PEXELS_API_KEY,
-    claudeCodePath: e.CLAUDE_CODE_PATH || 'claude',
-    claudeCodeTimeout: parseInt(e.CLAUDE_CODE_TIMEOUT || '60000', 10),
+    githubToken,
+    copilotModel: e.COPILOT_MODEL || 'gpt-4o-mini',
+    copilotTimeout: parseInt(e.COPILOT_TIMEOUT || '60000', 10),
     logLevel: e.LOG_LEVEL || 'info',
     logFile: e.LOG_FILE || './logs/bot.log',
     dryRun: e.DRY_RUN === 'true',

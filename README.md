@@ -1,19 +1,19 @@
 # news-poster
 
-AI-powered news aggregation and posting pipeline that fetches trending articles from GNews, curates them using Claude AI, and automatically posts to Facebook. Supports multiple independent channels, each with its own language, topic focus, posting schedule, and Facebook credentials.
+AI-powered news aggregation and posting pipeline that fetches trending articles from GNews, curates them using GitHub Copilot (via the GitHub Models API), and automatically posts to Facebook. Supports multiple independent channels, each with its own language, topic focus, posting schedule, and Facebook credentials.
 
 ## Pipeline Stages
 
 1. **Fetch** -- Retrieve trending news from multiple sources (GNews → NewsData.io → Google News RSS fallback chain) in both the channel's native language and English
 2. **Deduplicate** -- Filter out articles posted in the last 7 days and articles previously rejected via Telegram (30-day window)
-3. **Curate** -- Claude AI scores articles by recency and global impact, deduplicates by topic cluster (no repeated stories per run), and ranks by relevance to the channel's topic focus
-4. **Generate & Post** -- For each top article: write a caption (Claude, with translation if needed), resolve an image (article image → Pexels fallback → link-only), optionally send to Telegram for approval, then post to Facebook
+3. **Curate** -- GitHub Copilot scores articles by recency and global impact, deduplicates by topic cluster (no repeated stories per run), and ranks by relevance to the channel's topic focus
+4. **Generate & Post** -- For each top article: write a caption (GitHub Copilot, with translation if needed), resolve an image (article image → Pexels fallback → link-only), optionally send to Telegram for approval, then post to Facebook
 5. **Track** -- Persist posted and rejected article URLs in JSON rolling windows to prevent future duplicates
 
 ## Prerequisites
 
 - **Node.js** >= 18
-- **Claude Code CLI** installed and available in your PATH ([docs](https://docs.anthropic.com/en/docs/claude-code))
+- **GitHub account with Copilot access** -- a GitHub Personal Access Token with `models:read` permission, used to call the GitHub Models API. Get one at [github.com/settings/tokens](https://github.com/settings/tokens)
 - **GNews API key** -- free tier gives 100 requests/day. Get one at <https://gnews.io>
 - **NewsData.io API key** _(optional)_ -- fallback news source, free tier gives 200 requests/day. Get one at <https://newsdata.io/register>
 - **Facebook Page Access Token** -- a long-lived page access token with `pages_manage_posts` and `pages_read_engagement` permissions
@@ -43,8 +43,9 @@ cp .env.example .env
 | --------------------- | -------- | ---------------------------------------------------------------- |
 | `GNEWS_API_KEY`       | Yes      | GNews API key                                                    |
 | `NEWSDATA_API_KEY`    | No       | NewsData.io API key — fallback news source (200 req/day free)    |
-| `CLAUDE_CODE_PATH`    | No       | Path to the Claude CLI binary (default: `claude`)                |
-| `CLAUDE_CODE_TIMEOUT` | No       | Timeout in ms for Claude calls (default: `60000`)                |
+| `GITHUB_TOKEN`        | Yes      | GitHub PAT with `models:read` permission — used for the GitHub Models API |
+| `COPILOT_MODEL`       | No       | Model to use via GitHub Models API (default: `gpt-4o-mini`)      |
+| `COPILOT_TIMEOUT`     | No       | Timeout in ms for Copilot API calls (default: `60000`)           |
 | `PEXELS_API_KEY`      | No       | Pexels API key for image fallback                                |
 | `LOG_LEVEL`           | No       | Winston log level (default: `info`)                              |
 | `LOG_FILE`            | No       | Log file path (default: `./logs/bot.log`)                        |
@@ -117,7 +118,7 @@ cp channels/tech-pulse-en.env.example channels/tech-pulse-en.env
 | `LANGUAGE`              | No       | Language code for news fetching and caption writing: `es`, `en`, `pt`, etc. (default: `es`)       |
 | `COUNTRY`               | No       | Country code to filter GNews sources: `mx`, `us`, `ar`, etc.                                      |
 | `NEWS_CATEGORIES`       | No       | Comma-separated list of categories (default: `technology,world`). See below                       |
-| `TOPIC_FOCUS`           | No       | Free-text description guiding Claude curation (e.g. `"AI breakthroughs, startup funding rounds"`) |
+| `TOPIC_FOCUS`           | No       | Free-text description guiding Copilot curation (e.g. `"AI breakthroughs, startup funding rounds"`) |
 | `FACEBOOK_PAGE_ID`      | Yes      | Your Facebook Page ID                                                                             |
 | `FACEBOOK_ACCESS_TOKEN` | Yes      | Long-lived Facebook Page access token                                                             |
 | `POSTING_SCHEDULE`      | No       | Cron expression for the scheduler (default: `0 */3 * * *` -- every 3 hours)                       |
@@ -173,7 +174,7 @@ npx pm2 start node --name "news-bot-scheduler" \
 
 ```
 news-poster/
-├── .env.example                  # Shared env vars (API keys, Claude path)
+├── .env.example                  # Shared env vars (API keys, GitHub token, Copilot model)
 ├── channels/
 │   ├── epicentro.env.example      # Example: Spanish channel (Mexico-focused)
 │   └── tech-pulse-en.env.example # Example: English channel
@@ -183,13 +184,13 @@ news-poster/
 │   ├── pipeline.ts               # Main orchestration (5-stage workflow + category spread)
 │   ├── 1-news/
 │   │   ├── news-fetcher.ts       # Fetch orchestrator (GNews → NewsData.io → Google RSS)
-│   │   ├── news-curator.ts       # Claude AI ranking with topic deduplication
+│   │   ├── news-curator.ts       # Copilot ranking with topic deduplication
 │   │   └── sources/
 │   │       ├── gnews.ts          # GNews API (primary, 100 req/day free)
 │   │       ├── newsdata.ts       # NewsData.io (fallback, 200 req/day free)
 │   │       └── google-rss.ts     # Google News RSS (backup, unlimited)
 │   ├── 2-content/
-│   │   └── content-writer.ts     # Claude AI caption generation + translation
+│   │   └── content-writer.ts     # Copilot caption generation + translation
 │   ├── 3-image/
 │   │   └── image-fetcher.ts      # Image resolution (article → Pexels → null)
 │   ├── 4-post/
@@ -200,7 +201,7 @@ news-poster/
 │   │   ├── load-config.ts        # Multi-channel config loader
 │   │   └── types.ts              # TypeScript type definitions
 │   └── utils/
-│       ├── claude-code-cli.ts    # Claude Code CLI wrapper
+│       ├── copilot-cli.ts        # GitHub Models API client (Copilot)
 │       ├── logger.ts             # Winston logger
 │       └── telegram-approval.ts  # Telegram approve/reject flow
 ├── package.json

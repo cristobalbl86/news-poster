@@ -37,8 +37,9 @@ export interface BotConfig {
   gnewsApiKey: string;
   newsdataApiKey?: string;
   pexelsApiKey?: string;
-  claudeCodePath: string;
-  claudeCodeTimeout: number;
+  githubToken: string;
+  copilotModel: string;
+  copilotTimeout: number;
   logLevel: string;
   logFile: string;
   dryRun: boolean;
@@ -63,7 +64,7 @@ export interface NewsArticle {
 }
 
 export interface CuratedArticle extends NewsArticle {
-  relevanceScore: number;      // 1-10 score from Claude curation
+  relevanceScore: number;      // 1-10 score from Copilot curation
   curatedReason: string;       // Why this article is relevant/impactful
 }
 
