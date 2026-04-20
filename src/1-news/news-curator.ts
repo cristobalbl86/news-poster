@@ -19,7 +19,7 @@ import type { NewsArticle, CuratedArticle, BotConfig } from '../config/types.js'
 
 // Hard cap on articles sent to Claude — keeps prompt small and prevents timeouts.
 // Pre-selection ensures Mexico-category articles always have guaranteed slots.
-const MAX_ARTICLES_FOR_CURATION = 35;
+const MAX_ARTICLES_FOR_CURATION = 20;
 
 // Minimum timeout for curation regardless of channel config — curation is slow by design.
 const MIN_CURATION_TIMEOUT_MS = 150_000; // 2.5 minutes
@@ -27,7 +27,6 @@ const MIN_CURATION_TIMEOUT_MS = 150_000; // 2.5 minutes
 interface CurationResult {
   index: number;
   score: number;
-  reason: string;
   topicCluster?: string;
 }
 
@@ -74,7 +73,7 @@ The audience language is: ${config.language}
 
 CRITICAL: This page competes on SPEED. Being first to post breaking news is the #1 priority.
 
-NOTE: Some articles are in English (marked [EN]). Score them equally — they will be translated before posting. Do NOT penalize articles for being in a different language.
+NOTE: Some articles are in a different language (marked with tags like [EN]). Score them equally — they are automatically translated before posting. Do NOT penalize articles for being in a different language.
 
 Below are ${articles.length} news articles fetched from trending headlines. Your job is to rank them by a combination of RECENCY and IMPACT. Scoring rules:
 1. **Recency is king** — articles published in the last 1-2 hours should get a +2 bonus. Articles older than 4 hours should be penalized.
@@ -88,21 +87,19 @@ Below are ${articles.length} news articles fetched from trending headlines. Your
     - Liga MX, Selección Mexicana, deportistas mexicanos destacados
     - International news with direct Mexico impact: aranceles de EE.UU. a México, política migratoria de Trump, deportaciones, remesas, relaciones diplomáticas México-EE.UU., precio del petróleo, inversión en México
 4. **Skip truly irrelevant regional/local stories** — score 1-3 for hyper-local news from countries with no global influence and no connection to Mexico. This includes local crime, local elections, local sports from Uganda, Philippines, Bangladesh, Pakistan, etc. Mexico-domestic stories are NEVER "too local" for this page.
-5. **Topic focus match** — prioritize stories matching the page focus: ${config.topicFocus}. EXCEPTION: For sports results (match results, standings, athlete news) and science/space milestones (missions, discoveries, launches), do NOT apply the age penalty from rule 1 — a Champions League result or a space mission update is still worth posting at 4-6 hours old.
-6. **Skip** — stories that are too niche, too old, clickbait, pure celebrity gossip with no news value, or obvious duplicates.
+5. **Topic focus match** — prioritize stories matching the page focus: ${config.topicFocus}. EXCEPTION: For sports results and science/space milestones, do NOT apply the age penalty from rule 1.
 
 Articles:
 ${articleList}
 
-**DEDUPLICATION RULE**: If multiple articles cover the same event or story (e.g., several articles about the same war, the same product launch, the same person), include ONLY the single best one. Do not return near-duplicates — variety across different topics is required.
+**DEDUPLICATION RULE**: If multiple articles cover the same event, include ONLY the single best one. Variety across different topics is required.
 
 Return a JSON array of objects, one per article, with:
 - "index": the article number [0..${articles.length - 1}]
-- "score": score from 1 (skip) to 10 (must post NOW) — weight recency heavily
-- "reason": one sentence explaining why (in ${config.language})
-- "topicCluster": a short label for the story topic (e.g., "Iran war", "Apple earnings", "OpenAI GPT-5") — used to prevent duplicate posts
+- "score": 1 (skip) to 10 (must post NOW)
+- "topicCluster": short topic label (e.g., "Iran war", "Apple earnings") — used to prevent duplicates
 
-Sort the array by score descending (highest first). Only include articles with score >= 5. Never include two articles with the same topicCluster.`;
+Sort by score descending. Only include articles with score >= 5. Never include two articles with the same topicCluster.`;
 }
 
 export async function curateArticles(
@@ -113,10 +110,9 @@ export async function curateArticles(
 
   if (articles.length === 0) return [];
 
-  // If only 1-2 articles, skip curation overhead
-  if (articles.length <= 2) {
-    log.info('Only 1-2 articles — skipping AI curation');
-    return articles.map(a => ({ ...a, relevanceScore: 7, curatedReason: 'Auto-selected (few articles)' }));
+  if (articles.length <= config.maxPostsPerRun) {
+    log.info(`Only ${articles.length} articles (<= ${config.maxPostsPerRun} max posts) — skipping AI curation`);
+    return articles.map((a, i) => ({ ...a, relevanceScore: 10 - i, curatedReason: 'Auto-selected (few articles)' }));
   }
 
   const toSend = preselectArticles(articles, MAX_ARTICLES_FOR_CURATION);
@@ -144,7 +140,7 @@ export async function curateArticles(
         curated.push({
           ...toSend[r.index],
           relevanceScore: r.score,
-          curatedReason: r.reason,
+          curatedReason: r.topicCluster || 'curated',
         });
       }
     }

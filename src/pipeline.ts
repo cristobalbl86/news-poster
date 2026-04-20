@@ -152,7 +152,7 @@ export async function runPipeline(channelName: string, dryRunOverride?: boolean)
     log.info(`\n--- Article ${i + 1}/${toPost.length} ---`);
     log.info(`Title: "${article.title.slice(0, 70)}"`);
     if ('relevanceScore' in article) {
-      log.info(`Score: ${article.relevanceScore}/10 — ${article.curatedReason}`);
+      log.info(`Score: ${article.relevanceScore}/10 [${article.curatedReason}]`);
     }
 
     // Stage 4: Write caption
